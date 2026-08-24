@@ -112,3 +112,14 @@ src/components/auth-gate.tsx
 
 - `cookies.txt` (untuk video privat/age-restricted) diletakkan di root dan otomatis di-ignore git.
 - Untuk PostgreSQL produksi, ganti `DATABASE_URL` ke `postgresql://...` dan `npx prisma db push`.
+
+## Catatan Produksi (Single VPS)
+
+- (a) Jalankan web dan worker di server yang sama: terminal pertama 
+pm run build && npm run start, terminal kedua 
+pm run worker (opsional: daftarkan keduanya di pm2/systemd, contoh satu baris pm2: pm2 start npm --name klipchip-worker -- run worker).
+- (b) Rate limiter masih in-memory — valid untuk satu instance; ganti ke Redis jika web dijalankan multi-instance.
+- (c) cookies.txt bersifat global & kedaluwarsa — perbarui manual saat YouTube mulai menolak render.
+- (d) Retensi storage: file hasil render lebih tua dari RETENTION_DAYS hari (default 7) dihapus otomatis oleh worker.
+- (e) Jika web dan worker dipisah host, migrasi SQLite?PostgreSQL WAJIB dilakukan dulu (SQLite tidak mendukung akses lintas mesin).
+- (f) Worker mengaktifkan WAL mode SQLite saat start secara otomatis (mengurangi SQLITE_BUSY antara webapp dan worker).
