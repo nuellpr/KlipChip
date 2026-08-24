@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { isRenderableSourceUrl } from '@/lib/url-guard';
 
-export const maxDuration = 300; // render bisa memakan waktu beberapa menit
-
-// POST /api/render-clip — render final klip yang sudah dibayar via Python worker
+// POST /api/render-clip — masukkan klip yang sudah dibayar ke antrean render (ClipJob)
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -58,173 +56,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!clip.sourceUrl.startsWith('http')) {
+    if (!isRenderableSourceUrl(clip.sourceUrl)) {
       return NextResponse.json(
-        { error: 'Sumber video bukan URL yang dapat dirender oleh server' },
+        { error: 'Sumber video harus URL https dari YouTube atau Twitch' },
         { status: 400 }
       );
     }
 
-    await prisma.clip.update({
-      where: { id: clip.id },
-      data: {
-        status: 'processing',
-        renderProgress: 25,
-        renderStep: 'Memotong segmen video (FFmpeg Trimming)...',
-      },
-    });
-
-    fs.mkdirSync(storageDir, { recursive: true });
-    const jobsDir = path.join(storageDir, 'jobs');
-    fs.mkdirSync(jobsDir, { recursive: true });
-
-    const outputFilename = `klipchip_${clip.id}_9x16.mp4`;
-    const outputPath = path.join(storageDir, outputFilename);
-    const jobPath = path.join(jobsDir, `${clip.id}.json`);
-
-    let captions: unknown[] = [];
-    let captionConfig: Record<string, unknown> = {};
-    try {
-      const parsed = JSON.parse(clip.captionsJson || '[]');
-      if (Array.isArray(parsed)) captions = parsed;
-    } catch {
-      captions = [];
-    }
-    try {
-      captionConfig = JSON.parse(clip.captionConfigJson || '{}');
-    } catch {
-      captionConfig = {};
-    }
-
-    fs.writeFileSync(
-      jobPath,
-      JSON.stringify({
-        captions,
-        captionConfig,
-        startSeconds: clip.startSeconds,
-        endSeconds: clip.endSeconds,
-        language: clip.language,
-        layout: clip.layout,
-        subtitleSource: clip.subtitleSource,
+    await prisma.$transaction([
+      prisma.clip.update({
+        where: { id: clip.id },
+        data: {
+          status: 'processing',
+          renderProgress: 0,
+          renderStep: 'Masuk antrean render...',
+        },
       }),
-      'utf8'
-    );
+      prisma.clipJob.upsert({
+        where: { clipId: clip.id },
+        create: { clipId: clip.id, status: 'pending' },
+        update: { status: 'pending', attempts: 0, error: null, startedAt: null },
+      }),
+    ]);
 
-    const cookiesPath = path.join(process.cwd(), 'cookies.txt');
-    const workerScript = path.join(process.cwd(), 'scripts', 'clip_worker.py');
+    console.log(`[API /api/render-clip] Klip ${clip.id} masuk antrean render oleh user ${user.id}`);
 
-    const args = [
-      workerScript,
-      clip.sourceUrl,
-      clip.startSeconds.toString(),
-      clip.endSeconds.toString(),
-      outputPath,
-      fs.existsSync(cookiesPath) ? cookiesPath : '',
-      jobPath,
-    ];
-
-    console.log(`[API /api/render-clip] Render klip ${clip.id} oleh user ${user.id}`);
-
-    return await new Promise<NextResponse>((resolve) => {
-      const child = spawn('python', args, { cwd: process.cwd() });
-
-      let stderrData = '';
-
-      child.stdout.on('data', (data) => {
-        console.log(`[Worker STDOUT]: ${data}`);
-      });
-
-      child.stderr.on('data', (data) => {
-        stderrData += data.toString();
-        console.log(`[Worker STDERR]: ${data}`);
-      });
-
-      child.on('close', async (code) => {
-        try {
-          if (code === 0 && fs.existsSync(outputPath)) {
-            await prisma.clip.update({
-              where: { id: clip.id },
-              data: {
-                status: 'completed',
-                renderProgress: 100,
-                renderStep: 'Render selesai! File MP4 1080x1920 siap diunduh.',
-                outputFilename,
-                completedAt: new Date(),
-              },
-            });
-            resolve(
-              NextResponse.json({
-                success: true,
-                downloadUrl: `/api/clips/${clip.id}/download`,
-                sizeBytes: fs.statSync(outputPath).size,
-              })
-            );
-          } else {
-            // Render gagal setelah pembayaran → kembalikan saldo otomatis (sesuai PRD)
-            const errMsg = (stderrData || 'Worker gagal memproses video').slice(0, 280);
-            await prisma.$transaction([
-              prisma.clip.update({
-                where: { id: clip.id },
-                data: {
-                  status: 'failed',
-                  renderProgress: 0,
-                  renderStep: `Render gagal: ${errMsg}. Saldo klip telah dikembalikan.`,
-                },
-              }),
-              prisma.user.update({
-                where: { id: user.id },
-                data: { balanceClips: { increment: 1 } },
-              }),
-            ]);
-            resolve(
-              NextResponse.json({
-                success: false,
-                refunded: true,
-                error: errMsg,
-              })
-            );
-          }
-        } catch (dbErr) {
-          console.error('DB update error after worker close:', dbErr);
-          resolve(
-            NextResponse.json(
-              { success: false, error: 'Gagal memperbarui status klip' },
-              { status: 500 }
-            )
-          );
-        }
-      });
-
-      child.on('error', async (err) => {
-        console.error('Failed to spawn python worker:', err);
-        try {
-          await prisma.$transaction([
-            prisma.clip.update({
-              where: { id: clip.id },
-              data: {
-                status: 'failed',
-                renderStep: 'Python worker tidak dapat dijalankan. Saldo klip dikembalikan.',
-              },
-            }),
-            prisma.user.update({
-              where: { id: user.id },
-              data: { balanceClips: { increment: 1 } },
-            }),
-          ]);
-        } catch (dbErr) {
-          console.error('DB update error after spawn error:', dbErr);
-        }
-        resolve(
-          NextResponse.json({
-            success: false,
-            refunded: true,
-            error: err.message,
-          })
-        );
-      });
-    });
+    return NextResponse.json({ success: true, queued: true, clipId: clip.id });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[API /api/render-clip]', err);
+    return NextResponse.json({ error: 'Gagal memasukkan klip ke antrean render' }, { status: 500 });
   }
 }
