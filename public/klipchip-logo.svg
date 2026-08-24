@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="arc" x1="10%" y1="90%" x2="90%" y2="10%">
+      <stop offset="0" stop-color="#4c1d95"/>
+      <stop offset="0.45" stop-color="#7c3aed"/>
+      <stop offset="0.75" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="kg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="playBtn" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Circuit traces kiri -->
+  <g stroke="#6d28d9" stroke-width="2" opacity="0.65" fill="none">
+    <path d="M 36 78 h 14 l 8 -8"/>
+    <path d="M 30 100 h 18"/>
+    <path d="M 36 122 h 14 l 8 8"/>
+  </g>
+  <g fill="#8b5cf6" opacity="0.8">
+    <circle cx="33" cy="78" r="2.4"/>
+    <circle cx="27" cy="100" r="2.4"/>
+    <circle cx="33" cy="122" r="2.4"/>
+  </g>
+
+  <!-- Arc luar (C-shape, bukaan kanan) -->
+  <path d="M 155.7 139 A 68 68 0 1 1 155.7 61" fill="none" stroke="url(#arc)" stroke-width="16" stroke-linecap="round"/>
+
+  <!-- Huruf K -->
+  <path d="M72 58 h17 v36 l29 -36 h22 l-33 41 36 43 h-23 l-27 -35 -5 6 v29 h-17 z" fill="url(#kg)"/>
+
+  <!-- Paperclip diagonal -->
+  <g transform="rotate(40 103 92)">
+    <rect x="96" y="58" width="13" height="56" rx="6.5" fill="none" stroke="#e2e8f0" stroke-width="5"/>
+    <rect x="99.5" y="72" width="6" height="30" rx="3" fill="none" stroke="#e2e8f0" stroke-width="3.5" opacity="0.9"/>
+  </g>
+
+  <!-- Tombol play -->
+  <rect x="122" y="90" width="30" height="24" rx="7" fill="url(#playBtn)"/>
+  <path d="M130 96 L142 102 L130 108 z" fill="#ffffff"/>
+
+  <!-- Sparkle -->
+  <path d="M100 22 l2.6 8.4 8.4 2.6 -8.4 2.6 -2.6 8.4 -2.6 -8.4 -8.4 -2.6 8.4 -2.6 z" fill="#22d3ee"/>
+</svg>

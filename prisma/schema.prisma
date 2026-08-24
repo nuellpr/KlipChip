@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  provider     String    @default("magic_link")
+  role         String    @default("user")
+  balanceClips Int       @default(0)
+  avatarUrl    String    @default("")
+  createdAt    DateTime  @default(now())
+  clips        Clip[]
+  payments     Payment[]
+}
+
+model Clip {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  platform          String
+  sourceUrl         String
+  externalId        String   @default("")
+  videoTitle        String
+  channelName       String
+  thumbnailUrl      String   @default("")
+  sourceDurationSec Int      @default(0)
+  startSeconds      Float
+  endSeconds        Float
+  duration          Float
+  status            String   @default("preview")
+  captionsJson      String   @default("[]")
+  captionConfigJson String   @default("{}")
+  language          String   @default("auto")
+  layout            String   @default("auto")
+  subtitleSource    String   @default("auto")
+  outputFilename    String?
+  priceIdr          Int      @default(500)
+  renderProgress    Int      @default(0)
+  renderStep        String?
+  rating            Int?
+  feedbackText      String?
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+  payment           Payment?
+}
+
+model Payment {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clipId            String?   @unique
+  clip              Clip?     @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  packageCode       String?
+  creditAmount      Int?
+  amountIdr         Int
+  method            String
+  status            String    @default("pending")
+  providerReference String    @unique
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+}
