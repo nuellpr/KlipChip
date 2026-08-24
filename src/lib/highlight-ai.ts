@@ -21,6 +21,52 @@ export interface AiHighlight {
 
 const FORGE_BASE_URL = 'https://run.forgeapi.org/v1';
 const DEFAULT_MODEL = 'MiniMax-M3'; // Free tier yang benar-benar jalan dengan saldo $0 (tested OK), 1M context
+const FORGE_TIMEOUT_MS = 30_000;
+const FORGE_MAX_ATTEMPTS = 2;
+const FORGE_BACKOFF_MS = 1500;
+
+/**
+ * Fetch Forge dengan timeout + 1 retry (total maks 2 percobaan).
+ * Retry HANYA untuk network error/AbortError/HTTP 429/5xx; error HTTP lain
+ * langsung null. Gagal total → log degradasi eksplisit → null (heuristik lokal
+ * yang melanjutkan).
+ */
+async function forgeFetchWithRetry(
+  body: string,
+  apiKey: string,
+  model: string
+): Promise<Response | null> {
+  let lastReason = 'unknown';
+  for (let attempt = 1; attempt <= FORGE_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`${FORGE_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body,
+        signal: AbortSignal.timeout(FORGE_TIMEOUT_MS),
+      });
+      if (res.ok) return res;
+      if (res.status !== 429 && res.status < 500) {
+        const errText = await res.text();
+        console.warn(`[Forge] ${model} error ${res.status}:`, errText.slice(0, 300));
+        return null;
+      }
+      lastReason = `HTTP ${res.status}`;
+    } catch (e) {
+      lastReason = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    }
+    if (attempt < FORGE_MAX_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, FORGE_BACKOFF_MS));
+    }
+  }
+  console.warn(
+    `[Forge] degraded ke heuristik lokal setelah ${FORGE_MAX_ATTEMPTS} percobaan: ${lastReason}`
+  );
+  return null;
+}
 
 function getForgeConfig() {
   return {
@@ -79,13 +125,8 @@ ${transcriptForPrompt}
 Pilih 3 golden momen:`;
 
   try {
-    const res = await fetch(`${FORGE_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
+    const res = await forgeFetchWithRetry(
+      JSON.stringify({
         model,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -94,13 +135,10 @@ Pilih 3 golden momen:`;
         temperature: 0.7,
         response_format: { type: 'json_object' },
       }),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.warn(`[Forge] ${model} error ${res.status}:`, errText.slice(0, 300));
-      return null;
-    }
+      apiKey,
+      model
+    );
+    if (!res) return null;
 
     const data = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
