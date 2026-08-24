@@ -12,7 +12,7 @@ if (!process.env.DATABASE_URL) {
   }
 }
 const { prisma } = await import('../../src/lib/prisma.ts');
-const { runOnce } = await import('../../scripts/render-runner.mjs');
+const { runOnce, runOneSweepTick } = await import('../../scripts/render-runner.mjs');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const stamp = Date.now();
@@ -101,6 +101,37 @@ try {
   assert.equal(cjB.status, 'failed', 'B clipjob failed');
   assert.ok(cjB.error && /batas waktu|timeout/i.test(cjB.error), 'B error menyebut batas waktu');
   console.log(`PASS B: hang dibunuh ${dt}ms, refund sekali (${beforeB}->${balB}), job failed`);
+
+  console.log('== Skenario C: job stale disapu sweeper + refund sekali ==');
+  await cleanup(); user = clip = job = undefined;
+  process.env.RENDER_TIMEOUT_MS = '60000';
+  await seed('processing');
+  await prisma.clipJob.update({ where: { id: job.id }, data: { status: 'processing', attempts: 1, startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) } });
+  const beforeC = (await prisma.user.findUnique({ where: { id: user.id } })).balanceClips;
+  const sweepC = await runOneSweepTick();
+  assert.ok(sweepC.swept >= 1, `C menyapu minimal 1 job (swept=${sweepC.swept})`);
+  const cjC = await prisma.clipJob.findUnique({ where: { id: job.id } });
+  assert.equal(cjC.status, 'failed', 'C clipjob failed');
+  assert.equal(cjC.error, 'stale-processing-swept', 'C error stale-processing-swept');
+  const afterC = await prisma.clip.findUnique({ where: { id: clip.id } });
+  assert.equal(afterC.status, 'failed', 'C clip failed');
+  const balC = (await prisma.user.findUnique({ where: { id: user.id } })).balanceClips;
+  assert.equal(balC, beforeC + 1, `C refund tepat sekali (${beforeC} -> ${balC})`);
+  await runOneSweepTick();
+  const balC2 = (await prisma.user.findUnique({ where: { id: user.id } })).balanceClips;
+  assert.equal(balC2, balC, 'C sweep kedua tidak refund lagi');
+  console.log(`PASS C: stale disapu, refund sekali (${beforeC}->${balC}), idempoten`);
+
+  console.log('== Skenario D: job segar tidak disentuh sweeper ==');
+  await cleanup(); user = clip = job = undefined;
+  await seed('processing');
+  await prisma.clipJob.update({ where: { id: job.id }, data: { status: 'processing', attempts: 1, startedAt: new Date() } });
+  const beforeD = (await prisma.user.findUnique({ where: { id: user.id } })).balanceClips;
+  await runOneSweepTick();
+  const cjD = await prisma.clipJob.findUnique({ where: { id: job.id } });
+  assert.equal(cjD.status, 'processing', 'D job segar tetap processing');
+  assert.equal((await prisma.user.findUnique({ where: { id: user.id } })).balanceClips, beforeD, 'D saldo tidak berubah');
+  console.log('PASS D: fresh job aman dari sweep');
 
   console.log('ALL PASS');
 } finally {

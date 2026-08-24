@@ -208,11 +208,45 @@ export async function runOnce() {
   return processJob(job);
 }
 
+export async function runOneSweepTick() {
+  const graceMs = envInt('RENDER_TIMEOUT_MS', 900000) * 1.2;
+  const cutoff = new Date(Date.now() - graceMs);
+  const stuckNull = await prisma.clipJob.updateMany({
+    where: { status: 'processing', startedAt: null },
+    data: { status: 'pending' },
+  });
+  if (stuckNull.count > 0) console.log(`[sweep] reset ${stuckNull.count} job tanpa startedAt ke pending`);
+  const stale = await prisma.clipJob.findMany({
+    where: { status: 'processing', startedAt: { lt: cutoff } },
+    select: { id: true, clipId: true },
+  });
+  for (const job of stale) {
+    console.log(`[sweep] recovered stale job ${job.id}`);
+    try {
+      await refundFailedRender(job.clipId, 'Render dihentikan karena melebihi batas waktu (stale-processing-swept).');
+      await prisma.clipJob.update({ where: { id: job.id }, data: { status: 'failed', error: 'stale-processing-swept', completedAt: new Date() } });
+    } catch (err) {
+      console.error(`[sweep] gagal menyapu job ${job.id}:`, err);
+    }
+  }
+  return { reset: stuckNull.count, swept: stale.length };
+}
+
 async function main() {
   loadEnvFile();
   await prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL');
+  await runOneSweepTick();
   console.log('[runner] render-runner aktif (POLL_MS=%d, RENDER_TIMEOUT_MS=%d)', envInt('POLL_MS', 5000), envInt('RENDER_TIMEOUT_MS', 900000));
+  let lastSweep = Date.now();
   while (true) {
+    if (Date.now() - lastSweep >= envInt('SWEEP_INTERVAL_MS', 60000)) {
+      lastSweep = Date.now();
+      try {
+        await runOneSweepTick();
+      } catch (err) {
+        console.error('[runner] sweep error:', err);
+      }
+    }
     let r;
     try {
       r = await runOnce();
