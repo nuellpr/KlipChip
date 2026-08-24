@@ -67,6 +67,19 @@ function DashboardContent() {
     return matchesStatus && matchesSearch;
   });
 
+  const pollClipStatus = async (id: string) => {
+    const deadline = Date.now() + 20 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try {
+        const res = await fetch(`/api/clips/${id}/status`, { cache: 'no-store' });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.status === 'completed' || data.status === 'failed') return;
+      } catch {}
+    }
+  };
+
   const handleRetryJob = async (clipId: string) => {
     setRetryingClipId(clipId);
     try {
@@ -79,6 +92,7 @@ function DashboardContent() {
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Retry render gagal');
       }
+      void pollClipStatus(clipId).then(() => fetchClips());
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Retry render gagal');
     } finally {

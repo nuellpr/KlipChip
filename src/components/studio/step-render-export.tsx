@@ -97,6 +97,47 @@ export function StepRenderExport({
             return;
           }
 
+          if (apiRes.ok && apiData.success && apiData.queued) {
+            const deadline = Date.now() + 20 * 60 * 1000;
+            while (isMounted && Date.now() < deadline) {
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+              if (!isMounted) return;
+              const sRes = await fetch(`/api/clips/${clipId}/status`, { cache: 'no-store' }).catch(
+                () => null
+              );
+              if (!sRes || !sRes.ok) continue;
+              const s = await sRes.json().catch(() => ({}));
+              if (typeof s.renderProgress === 'number') {
+                setRenderProgress(Math.max(30, s.renderProgress));
+              }
+              if (s.renderStep) setCurrentStepText(s.renderStep);
+              if (s.status === 'completed' && s.downloadUrl) {
+                setDownloadBlobUrl(s.downloadUrl);
+                setRenderProgress(100);
+                setCurrentStepText('Render Selesai! Video Asli 1080x1920 MP4 Siap Diunduh.');
+                setIsRenderComplete(true);
+                try {
+                  confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+                } catch {}
+                return;
+              }
+              if (s.status === 'failed') {
+                setRenderProgress(15);
+                setCurrentStepText('Render backend gagal.');
+                setIsRenderFailed(true);
+                setRenderError('Render gagal di server. Saldo klip dikembalikan otomatis.');
+                return;
+              }
+            }
+            if (isMounted) {
+              setIsRenderFailed(true);
+              setRenderError(
+                'Render melebihi batas waktu pemantauan (20 menit). Cek Riwayat Klip untuk status terbaru.'
+              );
+            }
+            return;
+          }
+
           // Render backend gagal — tampilkan alasan & fallback ke canvas client
           if (apiData.error || apiData.refunded) {
             // Refund otomatis dilakukan server; beri tahu pengguna
