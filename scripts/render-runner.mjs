@@ -1,5 +1,5 @@
 import { spawn, execSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { prisma } from '../src/lib/prisma.ts';
@@ -232,12 +232,36 @@ export async function runOneSweepTick() {
   return { reset: stuckNull.count, swept: stale.length };
 }
 
+export async function cleanupStorage() {
+  const retentionMs = envInt('RETENTION_DAYS', 7) * 86400000;
+  const cutoff = Date.now() - retentionMs;
+  let removed = 0;
+  const sweepDir = (dir, ext) => {
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith(ext)) continue;
+      const p = join(dir, name);
+      try {
+        const st = statSync(p);
+        if (!st.isFile() || st.mtimeMs >= cutoff) continue;
+        rmSync(p);
+        removed++;
+        console.log('[retention] removed %s', p);
+      } catch {}
+    }
+  };
+  sweepDir(JOBS_DIR, '.json');
+  sweepDir(STORAGE, '.mp4');
+  return { removed };
+}
+
 async function main() {
   loadEnvFile();
   await prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL');
   await runOneSweepTick();
   console.log('[runner] render-runner aktif (POLL_MS=%d, RENDER_TIMEOUT_MS=%d)', envInt('POLL_MS', 5000), envInt('RENDER_TIMEOUT_MS', 900000));
   let lastSweep = Date.now();
+  let lastCleanup = Date.now();
   while (true) {
     if (Date.now() - lastSweep >= envInt('SWEEP_INTERVAL_MS', 60000)) {
       lastSweep = Date.now();
@@ -245,6 +269,14 @@ async function main() {
         await runOneSweepTick();
       } catch (err) {
         console.error('[runner] sweep error:', err);
+      }
+    }
+    if (Date.now() - lastCleanup >= envInt('CLEANUP_INTERVAL_MS', 86400000)) {
+      lastCleanup = Date.now();
+      try {
+        await cleanupStorage();
+      } catch (err) {
+        console.error('[runner] cleanup error:', err);
       }
     }
     let r;
