@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
+import { Readable } from 'stream';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 
@@ -38,13 +39,15 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     );
   }
 
-  const fileBuffer = fs.readFileSync(filePath);
+  // Streaming dari disk — memori tetap datar berapa pun ukuran file.
+  const stat = fs.statSync(filePath);
+  const stream = fs.createReadStream(filePath);
   const downloadName = `klipchip_${clip.id.slice(-8)}_9x16.mp4`;
 
-  return new NextResponse(new Uint8Array(fileBuffer), {
+  return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
     headers: {
       'Content-Type': 'video/mp4',
-      'Content-Length': String(fileBuffer.length),
+      'Content-Length': String(stat.size),
       'Content-Disposition': `attachment; filename="${downloadName}"`,
       'Cache-Control': 'private, no-store',
     },
