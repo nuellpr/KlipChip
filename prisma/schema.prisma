@@ -50,6 +50,22 @@ model Clip {
   createdAt         DateTime @default(now())
   completedAt       DateTime?
   payment           Payment?
+  clipJobs          ClipJob[]
+}
+
+model ClipJob {
+  id          String    @id @default(cuid())
+  clipId      String    @unique
+  clip        Clip      @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  error       String?
+  logTail     String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, createdAt])
 }
 
 model Payment {
