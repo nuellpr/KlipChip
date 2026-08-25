@@ -41,6 +41,9 @@ model Clip {
   language          String   @default("auto")
   layout            String   @default("auto")
   subtitleSource    String   @default("auto")
+  bilingualSubtitles Boolean @default(false)
+  secondaryLanguage String   @default("en")
+  socialSummary     String   @default("")
   outputFilename    String?
   priceIdr          Int      @default(500)
   renderProgress    Int      @default(0)

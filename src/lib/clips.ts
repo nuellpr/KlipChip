@@ -60,6 +60,9 @@ export function serializeClip(clip: Clip & { payment?: Payment | null }): ClipPr
     subtitleSource: VALID_SUBTITLE_SOURCES.includes(clip.subtitleSource)
       ? (clip.subtitleSource as ClipProject['subtitleSource'])
       : 'auto',
+    bilingualSubtitles: clip.bilingualSubtitles,
+    secondaryLanguage: clip.secondaryLanguage,
+    socialSummary: clip.socialSummary,
     previewUrl: clip.thumbnailUrl || undefined,
     outputUrl: hasOutput ? `/api/clips/${clip.id}/download` : undefined,
     paymentId: clip.payment?.providerReference,

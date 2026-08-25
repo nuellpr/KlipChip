@@ -109,6 +109,9 @@ export interface ClipProject {
   language: LanguageCode;
   layout: LayoutMode;
   subtitleSource: SubtitleSource;
+  bilingualSubtitles: boolean;
+  secondaryLanguage: string;
+  socialSummary: string;
   previewUrl?: string;
   outputUrl?: string;
   paymentId?: string;
