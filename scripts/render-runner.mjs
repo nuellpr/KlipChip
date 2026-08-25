@@ -4,6 +4,7 @@ import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { prisma } from '../src/lib/prisma.ts';
 import { refundFailedRender } from '../src/lib/refund.ts';
+import { summarizeClipForSocial } from '../src/lib/social-summary.ts';
 
 const ROOT = process.cwd();
 const STORAGE = join(ROOT, 'storage');
@@ -173,6 +174,7 @@ async function processJob(job) {
             }),
           ]);
           console.log(`[runner] SELESAI clip=${clip.id}`);
+          void summarizeClipForSocial(clip.id).catch(() => {});
           resolveDone({ claimed: true, outcome: 'completed' });
           return;
         }
