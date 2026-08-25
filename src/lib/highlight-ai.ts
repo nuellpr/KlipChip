@@ -19,7 +19,7 @@ export interface AiHighlight {
   description: string;
 }
 
-const FORGE_BASE_URL = 'https://run.forgeapi.org/v1';
+const FORGE_BASE_URL = process.env.FORGE_BASE_URL || 'https://run.forgeapi.org/v1';
 const DEFAULT_MODEL = 'MiniMax-M3'; // Free tier yang benar-benar jalan dengan saldo $0 (tested OK), 1M context
 const FORGE_TIMEOUT_MS = 30_000;
 const FORGE_MAX_ATTEMPTS = 2;
@@ -71,7 +71,9 @@ async function forgeFetchWithRetry(
 function getForgeConfig() {
   return {
     apiKey: process.env.FORGE_API_KEY || '',
-    model: process.env.FORGE_MODEL || DEFAULT_MODEL,
+    models: [process.env.FORGE_MODEL || DEFAULT_MODEL, process.env.FORGE_MODEL_FALLBACK || '']
+      .map((m) => m.trim())
+      .filter(Boolean),
   };
 }
 
@@ -86,7 +88,7 @@ export async function generateHighlightsWithForge(
   segments: TranscriptSegment[],
   videoMeta: { title: string; channelName: string; durationSeconds: number }
 ): Promise<AiHighlight[] | null> {
-  const { apiKey, model } = getForgeConfig();
+  const { apiKey, models } = getForgeConfig();
   if (!apiKey) return null;
   if (segments.length === 0) return null;
 
@@ -125,19 +127,23 @@ ${transcriptForPrompt}
 Pilih 3 golden momen:`;
 
   try {
-    const res = await forgeFetchWithRetry(
-      JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        response_format: { type: 'json_object' },
-      }),
-      apiKey,
-      model
-    );
+    let res: Response | null = null;
+    for (const model of models) {
+      res = await forgeFetchWithRetry(
+        JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.7,
+          response_format: { type: 'json_object' },
+        }),
+        apiKey,
+        model
+      );
+      if (res) break;
+    }
     if (!res) return null;
 
     const data = (await res.json()) as {
