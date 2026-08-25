@@ -133,6 +133,30 @@ try {
   assert.equal((await prisma.user.findUnique({ where: { id: user.id } })).balanceClips, beforeD, 'D saldo tidak berubah');
   console.log('PASS D: fresh job aman dari sweep');
 
+  console.log('== Skenario E: bilingual flags sampai worker via jobJson, render tetap sukses ==');
+  await cleanup(); user = clip = job = undefined;
+  const fakeBilingual = join(tmp, 'fake-bilingual.mjs');
+  mkdirSync(tmp, { recursive: true });
+  writeFileSync(fakeBilingual, `
+import { readFileSync, writeFileSync } from 'node:fs';
+const job = JSON.parse(readFileSync(process.argv[7], 'utf8'));
+if (job.bilingualSubtitles !== true || job.secondaryLanguage !== 'ja') {
+  console.error('BAD FLAGS ' + JSON.stringify(job));
+  process.exit(3);
+}
+console.log('[Whisper] Mulai transkripsi');
+writeFileSync(process.argv[5], 'MP4DUMMY');
+process.exit(0);
+`);
+  process.env.KLIPCHIP_WORKER_PATH = fakeBilingual;
+  await seed('paid');
+  await prisma.clip.update({ where: { id: clip.id }, data: { bilingualSubtitles: true, secondaryLanguage: 'ja' } });
+  const resE = await runOnce();
+  assert.equal(resE.outcome, 'completed', 'E completed dengan flag bilingual aktif');
+  const cjE = await prisma.clipJob.findUnique({ where: { id: job.id } });
+  assert.equal(cjE.status, 'completed', 'E clipjob completed');
+  console.log('PASS E: bilingualSubtitles=true & secondaryLanguage=ja diteruskan ke worker, render sukses');
+
   console.log('ALL PASS');
 } finally {
   await cleanup();

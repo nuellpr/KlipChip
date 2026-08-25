@@ -113,6 +113,8 @@ async function processJob(job) {
       language: clip.language,
       layout: clip.layout,
       subtitleSource: clip.subtitleSource,
+      bilingualSubtitles: clip.bilingualSubtitles === true,
+      secondaryLanguage: clip.secondaryLanguage || 'en',
     })
   );
   const cookiesPath = existsSync(join(ROOT, 'cookies.txt')) ? join(ROOT, 'cookies.txt') : '';

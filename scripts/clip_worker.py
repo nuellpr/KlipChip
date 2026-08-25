@@ -5,6 +5,9 @@ import subprocess
 import re
 import shutil
 import tempfile
+import time
+import urllib.request
+import urllib.error
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -333,7 +336,65 @@ def clean_ass_text(text, uppercase):
     return t.strip()
 
 
-def build_ass_file(captions, config, clip_start, clip_end, ass_path):
+def translate_lines(lines, target):
+    """Terjemahkan baris caption via Forge (batch hemat panggilan).
+    Gagal apa pun -> [] agar render berbayar lanjut single-track."""
+    try:
+        api_key = os.environ.get('FORGE_API_KEY') or ''
+        if not api_key or not lines:
+            return []
+        base_url = (os.environ.get('FORGE_BASE_URL') or 'https://run.forgeapi.org/v1').rstrip('/')
+        model = os.environ.get('FORGE_MODEL') or 'MiniMax-M3'
+        capped = [str(t or '') for t in lines][:120]
+        batch_size = 22
+        result = []
+        for start in range(0, len(capped), batch_size):
+            batch = capped[start:start + batch_size]
+            numbered = '\n'.join(f"{i + 1}.| {t}" for i, t in enumerate(batch))
+            prompt = (
+                f"Translate each numbered subtitle line to {target}. "
+                "Reply with the SAME numbering format 'N.| translated text', one per line, "
+                "no commentary. Natural, concise, spoken style.\n\n" + numbered
+            )
+            out = [''] * len(batch)
+            for attempt in range(2):
+                try:
+                    req = urllib.request.Request(
+                        base_url + '/chat/completions',
+                        data=json.dumps({
+                            'model': model,
+                            'messages': [{'role': 'user', 'content': prompt}],
+                        }).encode('utf-8'),
+                        headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                        method='POST',
+                    )
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        data = json.loads(resp.read().decode('utf-8'))
+                    content = str((data.get('choices') or [{}])[0].get('message', {}).get('content') or '')
+                    got = {}
+                    for raw in content.splitlines():
+                        mm = re.match(r'^\s*(\d+)\.\|\s*(.*)$', raw)
+                        if mm and 1 <= int(mm.group(1)) <= len(batch):
+                            got[int(mm.group(1))] = mm.group(2).strip()
+                    out = [got.get(i + 1, '') for i in range(len(batch))]
+                    break
+                except urllib.error.HTTPError as he:
+                    if attempt == 0 and (he.code == 429 or he.code >= 500):
+                        time.sleep(1.5)
+                        continue
+                    break
+                except Exception:
+                    if attempt == 0:
+                        time.sleep(1.5)
+                        continue
+            result.extend(out)
+        return result if any(str(t or '').strip() for t in result) else []
+    except Exception as e:
+        print(f"[Worker] Translate gagal, lanjut single-track: {e}")
+        return []
+
+
+def build_ass_file(captions, config, clip_start, clip_end, ass_path, translations=None):
     """Bangun file subtitle .ass dari data caption KlipChip (mendukung karaoke per kata)."""
     style = str(config.get('style') or 'hormozi')
     position = str(config.get('position') or 'bottom')
@@ -365,6 +426,10 @@ def build_ass_file(captions, config, clip_start, clip_end, ass_path):
 
     clip_duration = clip_end - clip_start
 
+    subs = [str(t or '').strip() for t in (translations or [])]
+    has_subs = any(subs)
+    sub_font_size = int(font_size * 0.6)
+
     header = (
         "[Script Info]\n"
         "Title: KlipChip Auto-Caption\n"
@@ -380,7 +445,12 @@ def build_ass_file(captions, config, clip_start, clip_end, ass_path):
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Caption,Arial,{font_size},{primary},{secondary},{outline_colour},{back_colour},"
         f"{bold},0,0,0,100,100,0,0,{border_style},{outline_w},0,{alignment},60,60,{margin_v},1\n"
-        "\n"
+        + (
+            f"Style: CaptionSub,Arial,{sub_font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,"
+            f"0,0,0,100,100,0,0,1,3,0,2,60,60,60,1\n"
+            if has_subs else ""
+        )
+        + "\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     )
@@ -391,7 +461,7 @@ def build_ass_file(captions, config, clip_start, clip_end, ass_path):
     highlight_color = hex_to_ass_color(config.get('highlightColor') or '#FACC15')
     use_uppercase = config.get('uppercase', True)
 
-    for cap in captions:
+    for ci, cap in enumerate(captions):
         line_start = float(cap.get('startSeconds', 0)) - clip_start
         line_end = float(cap.get('endSeconds', 0)) - clip_start
 
@@ -403,6 +473,8 @@ def build_ass_file(captions, config, clip_start, clip_end, ass_path):
         if rel_end - rel_start < 0.2:
             continue
 
+        sub_text = subs[ci] if has_subs and ci < len(subs) else ''
+
         words = cap.get('words') or []
         if not words and cap.get('text'):
             # fallback jika tidak ada kata per kata
@@ -410,6 +482,8 @@ def build_ass_file(captions, config, clip_start, clip_end, ass_path):
             text = clean_ass_text(cap.get('text'), use_uppercase)
             if text:
                 lines.append(f"Dialogue: 0,{ass_time(rel_start)},{ass_time(rel_end)},Caption,,0,0,0,,{text}")
+                if sub_text:
+                    lines.append(f"Dialogue: 1,{ass_time(rel_start)},{ass_time(rel_end)},CaptionSub,,0,0,0,,{clean_ass_text(sub_text, False)}")
             continue
 
         # Bangun teks dengan inline override tags sesuai gaya
@@ -488,6 +562,8 @@ def build_ass_file(captions, config, clip_start, clip_end, ass_path):
             continue
 
         lines.append(f"Dialogue: 0,{ass_time(rel_start)},{ass_time(rel_end)},Caption,,0,0,0,,{text}")
+        if sub_text:
+            lines.append(f"Dialogue: 1,{ass_time(rel_start)},{ass_time(rel_end)},CaptionSub,,0,0,0,,{clean_ass_text(sub_text, False)}")
 
     with open(ass_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
@@ -667,6 +743,8 @@ def process_clip(url, start_sec, end_sec, output_path, cookies_path=None, job_pa
     language = 'auto'
     layout = 'auto'
     subtitle_source = 'auto'
+    bilingual = False
+    secondary_language = 'en'
     if job_path and os.path.exists(job_path):
         try:
             with open(job_path, 'r', encoding='utf-8') as jf:
@@ -676,6 +754,8 @@ def process_clip(url, start_sec, end_sec, output_path, cookies_path=None, job_pa
             language = job.get('language') or 'auto'
             layout = job.get('layout') or 'auto'
             subtitle_source = job.get('subtitleSource') or 'auto'
+            bilingual = bool(job.get('bilingualSubtitles') or False)
+            secondary_language = job.get('secondaryLanguage') or 'en'
         except Exception as e:
             print(f"[Worker] Gagal baca job JSON: {e}")
 
@@ -706,11 +786,26 @@ def process_clip(url, start_sec, end_sec, output_path, cookies_path=None, job_pa
     # manual / auto tanpa whisper: pakai caption dari job JSON (hasil edit pengguna)
 
     # 3. Bangun file ASS bila ada captions
+    translations = []
+    if bilingual and captions:
+        try:
+            texts = [str(c.get('text') or '') for c in captions]
+            print(f"[Worker] Menerjemahkan {len(texts)} baris ke '{secondary_language}'...")
+            translations = translate_lines(texts, secondary_language)
+            if not any(str(t or '').strip() for t in translations):
+                translations = []
+                print("[Worker] Terjemahan kosong, lanjut single-track")
+            else:
+                print(f"[Worker] Terjemahan siap untuk {sum(1 for t in translations if t.strip())} baris")
+        except Exception as e:
+            print(f"[Worker] Translate error, lanjut single-track: {e}")
+            translations = []
+
     ass_path = None
     if captions:
         try:
             ass_path = os.path.splitext(output_abs)[0] + '.ass'
-            build_ass_file(captions, config, start_sec, end_sec, ass_path)
+            build_ass_file(captions, config, start_sec, end_sec, ass_path, translations)
             print(f"[Worker] Caption ASS dibuat: {ass_path} ({len(captions)} baris)")
         except Exception as e:
             print(f"[Worker] Gagal membuat subtitle ASS, lanjut tanpa caption: {e}")
