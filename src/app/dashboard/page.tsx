@@ -33,6 +33,24 @@ function DashboardContent() {
   const [activeInvoiceClip, setActiveInvoiceClip] = useState<ClipProject | null>(null);
   const [activePreviewClip, setActivePreviewClip] = useState<ClipProject | null>(null);
   const [retryingClipId, setRetryingClipId] = useState<string | null>(null);
+  const [socialOpenClipId, setSocialOpenClipId] = useState<string | null>(null);
+
+  interface SocialCopyBlock { title: string; desc: string; hashtags: string[] }
+
+  function parseSocialSummary(raw: string): Record<string, SocialCopyBlock> | null {
+    try {
+      const p: unknown = JSON.parse(raw);
+      if (!p || typeof p !== 'object') return null;
+      const o = p as Record<string, unknown>;
+      const valid = ['tiktok', 'reels', 'shorts'].every((k) => {
+        const b = o[k] as { title?: unknown } | undefined;
+        return !!b && typeof b === 'object' && typeof b.title === 'string';
+      });
+      return valid ? (o as Record<string, SocialCopyBlock>) : null;
+    } catch {
+      return null;
+    }
+  }
 
   const fetchClips = async () => {
     setIsLoadingClips(true);
@@ -361,6 +379,15 @@ function DashboardContent() {
                           <span>Unduh MP4</span>
                         </a>
                       )}
+
+                      {parseSocialSummary(clip.socialSummary || '') && (
+                        <button
+                          onClick={() => setSocialOpenClipId(socialOpenClipId === clip.id ? null : clip.id)}
+                          className="flex items-center gap-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 px-3.5 py-2 text-xs font-bold text-white border border-white/10 transition-all"
+                        >
+                          <span>Ringkasan sosmed</span>
+                        </button>
+                      )}
                     </>
                   )}
 
@@ -403,6 +430,27 @@ function DashboardContent() {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+
+                {clip.status === 'completed' && socialOpenClipId === clip.id && parseSocialSummary(clip.socialSummary || '') && (() => {
+                  const social = parseSocialSummary(clip.socialSummary || '')!;
+                  const blocks: [string, SocialCopyBlock][] = [
+                    ['TikTok', social.tiktok],
+                    ['IG Reels', social.reels],
+                    ['YouTube Shorts', social.shorts],
+                  ];
+                  return (
+                    <div className="w-full space-y-3 rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
+                      {blocks.map(([label, b]) => (
+                        <div key={label} className="space-y-1">
+                          <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">{label}</p>
+                          <p className="text-sm font-semibold text-white">{b.title}</p>
+                          <p className="text-xs text-zinc-300 whitespace-pre-wrap">{b.desc}</p>
+                          <p className="text-xs text-brand-300">{b.hashtags.join(' ')}</p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })
