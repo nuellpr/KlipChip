@@ -1,7 +1,6 @@
 import { prisma } from './prisma.ts';
 
 const FORGE_BASE_URL = process.env.FORGE_BASE_URL || 'https://run.forgeapi.org/v1';
-const DEFAULT_MODEL = 'MiniMax-M3';
 const CONTEXT_BUDGET = 4000;
 
 interface SocialCopy {
@@ -15,16 +14,31 @@ interface SocialPackage {
   shorts: SocialCopy;
 }
 
+function modelCandidates(): string[] {
+  const list = [process.env.FORGE_MODEL || 'MiniMax-M3', process.env.FORGE_MODEL_FALLBACK || '']
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return [...new Set(list)];
+}
+
 async function forgeChat(content: string): Promise<string | null> {
   const apiKey = process.env.FORGE_API_KEY;
   if (!apiKey) return null;
+  for (const model of modelCandidates()) {
+    const out = await forgeChatOnce(content, apiKey, model);
+    if (out !== null) return out;
+  }
+  return null;
+}
+
+async function forgeChatOnce(content: string, apiKey: string, model: string): Promise<string | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetch(`${FORGE_BASE_URL}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: process.env.FORGE_MODEL || DEFAULT_MODEL,
+          model,
           messages: [{ role: 'user', content }],
           response_format: { type: 'json_object' },
         }),
@@ -46,7 +60,7 @@ async function forgeChat(content: string): Promise<string | null> {
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
-      console.warn('[Forge] degraded, ringkasan sosmed dilewati:', err instanceof Error ? err.message : err);
+      console.warn(`[Forge] degraded (model=${model}):`, err instanceof Error ? err.message : err);
       return null;
     }
   }

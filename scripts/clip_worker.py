@@ -344,7 +344,10 @@ def translate_lines(lines, target):
         if not api_key or not lines:
             return []
         base_url = (os.environ.get('FORGE_BASE_URL') or 'https://run.forgeapi.org/v1').rstrip('/')
-        model = os.environ.get('FORGE_MODEL') or 'MiniMax-M3'
+        models = [os.environ.get('FORGE_MODEL') or 'MiniMax-M3']
+        fb = (os.environ.get('FORGE_MODEL_FALLBACK') or '').strip()
+        if fb and fb not in models:
+            models.append(fb)
         capped = [str(t or '') for t in lines][:120]
         batch_size = 22
         result = []
@@ -357,36 +360,42 @@ def translate_lines(lines, target):
                 "no commentary. Natural, concise, spoken style.\n\n" + numbered
             )
             out = [''] * len(batch)
-            for attempt in range(2):
-                try:
-                    req = urllib.request.Request(
-                        base_url + '/chat/completions',
-                        data=json.dumps({
-                            'model': model,
-                            'messages': [{'role': 'user', 'content': prompt}],
-                        }).encode('utf-8'),
-                        headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
-                        method='POST',
-                    )
-                    with urllib.request.urlopen(req, timeout=30) as resp:
-                        data = json.loads(resp.read().decode('utf-8'))
-                    content = str((data.get('choices') or [{}])[0].get('message', {}).get('content') or '')
-                    got = {}
-                    for raw in content.splitlines():
-                        mm = re.match(r'^\s*(\d+)\.\|\s*(.*)$', raw)
-                        if mm and 1 <= int(mm.group(1)) <= len(batch):
-                            got[int(mm.group(1))] = mm.group(2).strip()
-                    out = [got.get(i + 1, '') for i in range(len(batch))]
+            for model in models:
+                ok = False
+                for attempt in range(2):
+                    try:
+                        req = urllib.request.Request(
+                            base_url + '/chat/completions',
+                            data=json.dumps({
+                                'model': model,
+                                'messages': [{'role': 'user', 'content': prompt}],
+                            }).encode('utf-8'),
+                            headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                            method='POST',
+                        )
+                        with urllib.request.urlopen(req, timeout=30) as resp:
+                            data = json.loads(resp.read().decode('utf-8'))
+                        content = str((data.get('choices') or [{}])[0].get('message', {}).get('content') or '')
+                        got = {}
+                        for raw in content.splitlines():
+                            mm = re.match(r'^\s*(\d+)\.\|\s*(.*)$', raw)
+                            if mm and 1 <= int(mm.group(1)) <= len(batch):
+                                got[int(mm.group(1))] = mm.group(2).strip()
+                        out = [got.get(i + 1, '') for i in range(len(batch))]
+                        ok = True
+                        break
+                    except urllib.error.HTTPError as he:
+                        if attempt == 0 and (he.code == 429 or he.code >= 500):
+                            time.sleep(1.5)
+                            continue
+                        break
+                    except Exception:
+                        if attempt == 0:
+                            time.sleep(1.5)
+                            continue
+                if ok:
                     break
-                except urllib.error.HTTPError as he:
-                    if attempt == 0 and (he.code == 429 or he.code >= 500):
-                        time.sleep(1.5)
-                        continue
-                    break
-                except Exception:
-                    if attempt == 0:
-                        time.sleep(1.5)
-                        continue
+                print(f"[Worker] Model '{model}' gagal, coba fallback...")
             result.extend(out)
         return result if any(str(t or '').strip() for t in result) else []
     except Exception as e:
