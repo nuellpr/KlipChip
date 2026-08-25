@@ -98,7 +98,7 @@ function StudioContent() {
   const handleProceedToCheckout = async (
     finalCaptions: CaptionLine[],
     finalConfig: CaptionConfig,
-    finalMeta?: { language?: LanguageCode; layout?: LayoutMode; subtitleSource?: SubtitleSource }
+    finalMeta?: { language?: LanguageCode; layout?: LayoutMode; subtitleSource?: SubtitleSource; bilingualSubtitles?: boolean; secondaryLanguage?: string }
   ) => {
     setCaptions(finalCaptions);
     setCaptionConfig(finalConfig);
@@ -136,6 +136,8 @@ function StudioContent() {
           language: finalMeta?.language ?? language,
           layout: finalMeta?.layout ?? layout,
           subtitleSource: finalMeta?.subtitleSource ?? subtitleSource,
+          bilingualSubtitles: finalMeta?.bilingualSubtitles === true,
+          secondaryLanguage: finalMeta?.secondaryLanguage ?? 'en',
           priceIdr: CLIP_PRICE_IDR,
         }),
       });

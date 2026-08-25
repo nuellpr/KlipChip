@@ -8,6 +8,7 @@ const VALID_PLATFORMS = ['youtube', 'twitch', 'upload'];
 const VALID_LANGUAGES = ['auto', 'id', 'en', 'ms', 'jv', 'ko', 'ja', 'es'];
 const VALID_LAYOUTS = ['auto', 'fit_blur', 'crop_1_1_blur', 'split', 'gameplay', 'face'];
 const VALID_SUBTITLE_SOURCES = ['auto', 'whisper', 'youtube', 'manual', 'none'];
+const VALID_SECONDARY_LANGUAGES = ['en', 'ja', 'ko', 'es'];
 const MAX_CLIP_SECONDS = 120;
 
 // GET /api/clips — daftar klip milik pengguna yang sedang masuk
@@ -72,6 +73,10 @@ export async function POST(req: NextRequest) {
     const subtitleSource = VALID_SUBTITLE_SOURCES.includes(body.subtitleSource)
       ? body.subtitleSource
       : 'auto';
+    const bilingualSubtitles = body.bilingualSubtitles === true;
+    const secondaryLanguage = VALID_SECONDARY_LANGUAGES.includes(body.secondaryLanguage)
+      ? body.secondaryLanguage
+      : 'en';
 
     const name =
       typeof body.name === 'string' && body.name.trim().length > 0
@@ -100,6 +105,8 @@ export async function POST(req: NextRequest) {
         language,
         layout,
         subtitleSource,
+        bilingualSubtitles,
+        secondaryLanguage,
         priceIdr,
         renderStep: 'Preview siap, menunggu pembayaran.',
       },

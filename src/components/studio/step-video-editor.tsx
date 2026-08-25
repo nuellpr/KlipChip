@@ -44,7 +44,7 @@ interface StepVideoEditorProps {
   onProceedToCheckout: (
     captions: CaptionLine[],
     config: CaptionConfig,
-    meta?: { language?: LanguageCode; layout?: LayoutMode; subtitleSource?: SubtitleSource }
+    meta?: { language?: LanguageCode; layout?: LayoutMode; subtitleSource?: SubtitleSource; bilingualSubtitles?: boolean; secondaryLanguage?: string }
   ) => void;
   onBack: () => void;
 }
@@ -72,6 +72,8 @@ export function StepVideoEditor({
   const [language] = useState<LanguageCode>(initialLanguage);
   const [layout, setLayout] = useState<LayoutMode>(initialLayout);
   const [subtitleSource, setSubtitleSource] = useState<SubtitleSource>(initialSubtitleSource);
+  const [bilingualSubtitles, setBilingualSubtitles] = useState(false);
+  const [secondaryLanguage, setSecondaryLanguage] = useState('en');
 
   // Captions state
   const [captions, setCaptions] = useState<CaptionLine[]>(initialCaptions);
@@ -568,6 +570,38 @@ export function StepVideoEditor({
                 Bahasa: {language === 'auto' ? 'Otomatis (deteksi sendiri)' : language.toUpperCase()} — diatur di Langkah 2.
               </p>
             </div>
+
+            {/* Bilingual subtitles */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300">Subtitle Bilingual</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setBilingualSubtitles(!bilingualSubtitles)}
+                  disabled={subtitleSource === 'none'}
+                  className={`rounded-xl px-4 py-2 text-xs font-bold transition-all border disabled:opacity-40 disabled:cursor-not-allowed ${
+                    bilingualSubtitles && subtitleSource !== 'none'
+                      ? 'border-cyan-400 bg-brand-950/40 ring-1 ring-cyan-400 text-cyan-300'
+                      : 'border-white/10 bg-zinc-950/60 hover:bg-zinc-800 text-white'
+                  }`}
+                >
+                  {bilingualSubtitles && subtitleSource !== 'none' ? 'Aktif' : 'Nonaktif'}
+                </button>
+                <select
+                  value={secondaryLanguage}
+                  onChange={(e) => setSecondaryLanguage(e.target.value)}
+                  disabled={subtitleSource === 'none' || !bilingualSubtitles}
+                  className="rounded-xl border border-white/10 bg-zinc-950/60 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+                >
+                  <option value="en">EN</option>
+                  <option value="ja">JA</option>
+                  <option value="ko">KO</option>
+                  <option value="es">ES</option>
+                </select>
+              </div>
+              <p className="text-[10px] text-zinc-500">
+                Terjemahan ditampilkan di bawah caption utama saat render backend.
+              </p>
+            </div>
           </div>
 
           {/* Tab 1: Caption Style Preset Selection */}
@@ -786,7 +820,7 @@ export function StepVideoEditor({
             </button>
 
             <button
-              onClick={() => onProceedToCheckout(captions, captionConfig, { language, layout, subtitleSource })}
+              onClick={() => onProceedToCheckout(captions, captionConfig, { language, layout, subtitleSource, bilingualSubtitles: bilingualSubtitles && subtitleSource !== 'none', secondaryLanguage })}
               className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-brand-600 via-brand-500 to-cyan-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand-500/30 hover:brightness-110 active:scale-95 transition-all"
             >
               <span>Lanjut ke Checkout & Render (1 Kredit / Rp 500)</span>
