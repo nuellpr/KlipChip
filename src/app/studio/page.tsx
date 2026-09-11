@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { StepUrlInput } from '@/components/studio/step-url-input';
-import { StepHighlightAi } from '@/components/studio/step-highlight-ai';
+import { StepHighlightAi, DURATION_PRESETS } from '@/components/studio/step-highlight-ai';
 import { StepVideoEditor } from '@/components/studio/step-video-editor';
 import { StepCheckout } from '@/components/studio/step-checkout';
 import { StepRenderExport } from '@/components/studio/step-render-export';
+import { StepBatchRender, BatchClipItem } from '@/components/studio/step-batch-render';
 import { AuthGate } from '@/components/auth-gate';
 import { useAuth } from '@/lib/use-auth';
 import { 
@@ -49,6 +50,7 @@ function StudioContent() {
   });
   const [paymentRef, setPaymentRef] = useState<string>('');
   const [clipId, setClipId] = useState<string | null>(null);
+  const [batchClips, setBatchClips] = useState<BatchClipItem[]>([]);
   const [isSavingClip, setIsSavingClip] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [durationPreset, setDurationPreset] = useState<DurationPreset>('auto');
@@ -92,6 +94,90 @@ function StudioContent() {
     }
 
     setCurrentStep(3);
+  };
+
+  // Step 2 (batch) -> langsung buat & render hingga 3 klip dari 1 video
+  const handleBatchSelected = async (highlights: HighlightCandidate[]) => {
+    if (!selectedVideo) return;
+    const presetInfo = DURATION_PRESETS.find((p) => p.id === durationPreset) || DURATION_PRESETS[3];
+    const created: BatchClipItem[] = [];
+    setIsSavingClip(true);
+    setSaveError('');
+    try {
+      for (const h of highlights.slice(0, 3)) {
+        let start = h.startSeconds;
+        let end = h.endSeconds;
+        const candDur = end - start;
+        if (durationPreset !== 'auto') {
+          if (candDur > presetInfo.max) {
+            end = Math.min(start + presetInfo.max, selectedVideo.durationSeconds);
+          } else if (candDur < presetInfo.min) {
+            start = Math.max(0, Math.min(start - (presetInfo.min - candDur), selectedVideo.durationSeconds - presetInfo.min));
+            end = start + presetInfo.min;
+          }
+        }
+        const finalStart = Math.max(0, start);
+        const finalEnd = Math.min(selectedVideo.durationSeconds, end);
+        const autoCaps =
+          (selectedPreset && selectedPreset.captionsMap[h.id]) ||
+          generateAutoCaptionsForCustomTime(finalStart, finalEnd, undefined, selectedVideo.transcript);
+
+        const res = await fetch('/api/clips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `${selectedVideo.title.slice(0, 40)} [Klip ${created.length + 1}]`,
+            platform: selectedVideo.platform,
+            sourceUrl: selectedVideo.sourceUrl.startsWith('http')
+              ? selectedVideo.sourceUrl
+              : `https://www.youtube.com/watch?v=${selectedVideo.externalId}`,
+            externalId: selectedVideo.externalId,
+            videoTitle: selectedVideo.title,
+            channelName: selectedVideo.channelName,
+            thumbnailUrl: selectedVideo.thumbnailUrl,
+            sourceDurationSec: selectedVideo.durationSeconds,
+            startSeconds: finalStart,
+            endSeconds: finalEnd,
+            captions: autoCaps,
+            captionConfig,
+            language,
+            layout,
+            subtitleSource,
+            bilingualSubtitles: false,
+            secondaryLanguage: 'en',
+            priceIdr: CLIP_PRICE_IDR,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Gagal membuat klip');
+        const cid = data.clip.id;
+
+        const creditRes = await fetch('/api/payments/use-credit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clipId: cid }),
+        });
+        if (!creditRes.ok) {
+          const cd = await creditRes.json().catch(() => ({}));
+          throw new Error(cd.error || 'Kredit tidak cukup untuk semua klip batch');
+        }
+
+        await fetch('/api/render-clip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clipId: cid }),
+        });
+
+        created.push({ clipId: cid, name: h.title, startSeconds: finalStart, endSeconds: finalEnd });
+      }
+      setBatchClips(created);
+      setPaymentRef(`KC-BATCH-${created.length}-${Date.now().toString().slice(-6)}`);
+      setCurrentStep(5);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Gagal memproses batch klip');
+    } finally {
+      setIsSavingClip(false);
+    }
   };
 
   // Step 3 -> Step 4 (simpan klip ke database terlebih dahulu)
@@ -168,6 +254,7 @@ function StudioContent() {
     setSelectedPreset(undefined);
     setCaptions([]);
     setClipId(null);
+    setBatchClips([]);
     setPaymentRef('');
     setSaveError('');
     setDurationPreset('auto');
@@ -265,6 +352,7 @@ function StudioContent() {
             onDurationPresetChange={setDurationPreset}
             onLanguageChange={setLanguage}
             onHighlightSelected={handleHighlightSelected}
+            onHighlightsSelected={handleBatchSelected}
             onBack={() => setCurrentStep(1)}
           />
         )}
@@ -299,7 +387,14 @@ function StudioContent() {
         )}
 
         {/* Step 5 */}
-        {currentStep === 5 && selectedVideo && (
+        {currentStep === 5 && selectedVideo && batchClips.length > 0 ? (
+          <StepBatchRender
+            video={selectedVideo}
+            batchClips={batchClips}
+            paymentReference={paymentRef || 'KC-PAY-DEMO'}
+            onReset={handleReset}
+          />
+        ) : currentStep === 5 && selectedVideo && (
           <StepRenderExport
             video={selectedVideo}
             startSeconds={startSeconds}

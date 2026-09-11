@@ -9,13 +9,14 @@ import {
   ArrowRight, 
   ArrowLeft,
   Timer,
-  Languages
+  Languages,
+  Layers
 } from 'lucide-react';
 import { SourceVideo, HighlightCandidate, DurationPreset, LanguageCode } from '@/lib/types';
 import { PresetVideoItem } from '@/data/sample-videos';
 import { formatTimestamp } from '@/lib/caption-engine';
 
-const DURATION_PRESETS: { id: DurationPreset; label: string; min: number; max: number; desc: string }[] = [
+export const DURATION_PRESETS: { id: DurationPreset; label: string; min: number; max: number; desc: string }[] = [
   { id: 'short', label: 'Singkat', min: 15, max: 30, desc: '15–30 detik' },
   { id: 'medium', label: 'Sedang', min: 30, max: 60, desc: '30–60 detik' },
   { id: 'long', label: 'Panjang', min: 60, max: 120, desc: '60–120 detik' },
@@ -41,8 +42,11 @@ interface StepHighlightAiProps {
   onDurationPresetChange: (p: DurationPreset) => void;
   onLanguageChange: (l: LanguageCode) => void;
   onHighlightSelected: (startSec: number, endSec: number, highlight?: HighlightCandidate) => void;
+  onHighlightsSelected?: (highlights: HighlightCandidate[]) => void;
   onBack: () => void;
 }
+
+const MAX_BATCH = 3;
 
 export function StepHighlightAi({
   video,
@@ -52,6 +56,7 @@ export function StepHighlightAi({
   onDurationPresetChange,
   onLanguageChange,
   onHighlightSelected,
+  onHighlightsSelected,
   onBack,
 }: StepHighlightAiProps) {
   // Candidate highlights from preset/generated. Jika kosong,
@@ -60,10 +65,22 @@ export function StepHighlightAi({
 
   const [mode, setMode] = useState<'ai' | 'manual'>(candidates.length > 0 ? 'ai' : 'manual');
   const [selectedCandidateId, setSelectedCandidateId] = useState<string>(candidates[0]?.id || '');
-  
+
+  // Batch mode: pilih hingga 3 momen dari 1 video
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
+
   // Manual timestamp states
   const [manualStart, setManualStart] = useState<number>(candidates[0]?.startSeconds || 120);
   const [manualDuration, setManualDuration] = useState<number>(35);
+
+  const toggleBatch = (id: string) => {
+    setSelectedBatchIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= MAX_BATCH) return prev;
+      return [...prev, id];
+    });
+  };
 
   const presetInfo = DURATION_PRESETS.find((p) => p.id === durationPreset) || DURATION_PRESETS[3];
   const presetMin = presetInfo.min;
@@ -72,6 +89,14 @@ export function StepHighlightAi({
   const selectedCandidate = candidates.find((c) => c.id === selectedCandidateId) || candidates[0];
 
   const handleProceed = () => {
+    if (batchMode) {
+      const picked = candidates
+        .filter((c) => selectedBatchIds.includes(c.id))
+        .slice(0, MAX_BATCH);
+      if (picked.length === 0) return;
+      onHighlightsSelected?.(picked);
+      return;
+    }
     if (mode === 'ai' && selectedCandidate) {
       let start = selectedCandidate.startSeconds;
       let end = selectedCandidate.endSeconds;
@@ -137,6 +162,26 @@ export function StepHighlightAi({
             <span>Timestamp Manual</span>
           </button>
         </div>
+
+        {/* Batch toggle: 1 URL -> hingga 3 video */}
+        {candidates.length > 0 && (
+          <button
+            onClick={() => {
+              const next = !batchMode;
+              setBatchMode(next);
+              if (next) setMode('ai');
+            }}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${
+              batchMode
+                ? 'border-cyan-400 bg-brand-950/40 text-cyan-300 ring-1 ring-cyan-400'
+                : 'border-white/10 bg-zinc-950/60 text-zinc-400 hover:text-white'
+            }`}
+            title="Buat hingga 3 klip sekaligus dari 1 video"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span>Batch {selectedBatchIds.length}/{MAX_BATCH}</span>
+          </button>
+        )}
       </div>
 
       {/* Durasi Preset & Bahasa */}
@@ -287,9 +332,13 @@ export function StepHighlightAi({
               return (
                 <div
                   key={cand.id}
-                  onClick={() => setSelectedCandidateId(cand.id)}
+                  onClick={() =>
+                    batchMode
+                      ? toggleBatch(cand.id)
+                      : setSelectedCandidateId(cand.id)
+                  }
                   className={`cursor-pointer rounded-2xl p-4 transition-all border ${
-                    isSelected
+                    (batchMode ? selectedBatchIds.includes(cand.id) : isSelected)
                       ? 'border-cyan-400 bg-brand-950/40 ring-2 ring-cyan-400/30 shadow-xl shadow-brand-500/10'
                       : 'border-white/10 bg-zinc-900/60 hover:bg-zinc-850'
                   }`}
@@ -297,7 +346,9 @@ export function StepHighlightAi({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2.5">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500/20 text-brand-300 font-extrabold text-xs">
-                        #{idx + 1}
+                        {batchMode && selectedBatchIds.includes(cand.id)
+                          ? selectedBatchIds.indexOf(cand.id) + 1
+                          : `#${idx + 1}`}
                       </span>
                       <h4 className="text-sm font-bold text-white">{cand.title}</h4>
                     </div>
@@ -410,9 +461,14 @@ export function StepHighlightAi({
 
         <button
           onClick={handleProceed}
-          className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-brand-600 via-brand-500 to-cyan-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand-500/30 hover:brightness-110 active:scale-95 transition-all"
+          disabled={batchMode && selectedBatchIds.length === 0}
+          className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-brand-600 via-brand-500 to-cyan-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand-500/30 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span>Lanjut ke Editor 9:16 & Caption</span>
+          <span>
+            {batchMode
+              ? `Buat ${selectedBatchIds.length} Video Sekaligus`
+              : 'Lanjut ke Editor 9:16 & Caption'}
+          </span>
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>

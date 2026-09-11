@@ -10,7 +10,6 @@ const SLANG_PHRASES = INITIAL_SLANG_DICTIONARY.map((s) => s.slang.toLowerCase())
 );
 
 const BIN_SECONDS = 5;
-const WINDOW_MIN_SECONDS = 15;
 
 export function tokenize(segments: TranscriptSegment[], startSec: number, endSec: number): string[] {
   const words: string[] = [];
@@ -131,7 +130,6 @@ export function describeWindow(segments: TranscriptSegment[], startSec: number, 
   const fullText = inWindow.map((s) => s.text).join(' ');
   const slangs = countSlangs(fullText);
   const words = tokenize(segments, startSec, endSec);
-  const topWords = [...new Set(words)].slice(0, 4).map((w) => w.charAt(0).toUpperCase() + w.slice(1));
 
   let hourglassTitle = `Puncak reaksi ${inWindow.length > 0 ? (inWindow[0].text.trim().split(/\s+/).slice(0, 6).join(' ')) : 'momen'}`;
   hourglassTitle = hourglassTitle.replace(/[.,!?;:]+$/, '');

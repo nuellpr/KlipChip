@@ -228,7 +228,6 @@ export async function exportVerticalVideoBlob(params: ExportVideoParams): Promis
       // Simulasi waktu caption: real-time jika ada video asli, else kompresi fallback
       const ratio = currentFrame / totalFrames;
       const simulatedTimeSec = startSeconds + ratio * (endSeconds - startSeconds);
-      const videoTimeSec = startSeconds + currentFrame / RECORD_FPS;
 
       if (onProgress) {
         if (progressPercent < 30) {
