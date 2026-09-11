@@ -42,9 +42,20 @@ function sleep(ms) {
 let pythonBinCache = null;
 function pythonBin() {
   if (pythonBinCache) return pythonBinCache;
-  for (const cand of ['python', 'python3']) {
+  const candidates = ['python', 'python3', 'py'];
+  const localAppData = process.env.LOCALAPPDATA || '';
+  if (localAppData) {
+    const pyDir = join(localAppData, 'Programs', 'Python');
+    if (existsSync(pyDir)) {
+      for (const d of readdirSync(pyDir).sort().reverse()) {
+        const exe = join(pyDir, d, 'python.exe');
+        if (existsSync(exe)) candidates.push(exe);
+      }
+    }
+  }
+  for (const cand of candidates) {
     try {
-      execSync(`${cand} --version`, { stdio: 'ignore' });
+      execSync(`"${cand}" --version`, { stdio: 'ignore' });
       pythonBinCache = cand;
       return cand;
     } catch {}

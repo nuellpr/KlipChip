@@ -61,9 +61,9 @@ def transcribe_with_whisper(video_path, clip_start, clip_end, language='auto'):
     try:
         ffmpeg_exe = get_ffmpeg_path()
         wav_path = video_path + ".whisper.wav"
-        # Ekstrak audio 16k mono PCM
+        # Ekstrak audio 16k mono PCM — tambahkan +genpts agar sinkron untuk VFR/50fps
         dur = max(1.0, clip_end - clip_start)
-        cmd = [ffmpeg_exe, "-y", "-i", video_path, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav_path]
+        cmd = [ffmpeg_exe, "-y", "-fflags", "+genpts", "-i", video_path, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav_path]
         print(f"[Whisper] Ekstrak audio {dur:.1f}s -> {wav_path}")
         res = subprocess.run(cmd, capture_output=True, text=True)
         if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 1000:
@@ -625,12 +625,14 @@ def ensure_audio_stream(video_path, url, ffmpeg_exe, output_dir, cookies_path=No
         merged = video_path + '.merged.mp4'
         mux_cmd = [
             ffmpeg_exe, '-y',
-            '-i', video_path,
-            '-i', chosen_audio,
+            '-fflags', '+genpts', '-i', video_path,
+            '-fflags', '+genpts', '-i', chosen_audio,
             '-map', '0:v:0', '-map', '1:a:0',
-            '-c:v', 'copy',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
             '-c:a', 'aac', '-b:a', '160k',
             '-shortest',
+            '-avoid_negative_ts', 'make_zero',
+            '-max_interleave_delta', '100M',
             merged,
         ]
         mux_res = subprocess.run(mux_cmd, capture_output=True, text=True, timeout=300)
@@ -860,7 +862,7 @@ def process_clip(url, start_sec, end_sec, output_path, cookies_path=None, job_pa
         ffmpeg_cmd = [
             ffmpeg_exe,
             '-y',
-            '-i', chosen_raw,
+            '-fflags', '+genpts', '-i', chosen_raw,
             '-filter_complex', fc,
             '-map', '[vout]',
             '-map', '0:a:0?',
@@ -904,7 +906,7 @@ def process_clip(url, start_sec, end_sec, output_path, cookies_path=None, job_pa
         ffmpeg_cmd = [
             ffmpeg_exe,
             '-y',
-            '-i', chosen_raw,
+            '-fflags', '+genpts', '-i', chosen_raw,
             '-vf', vf_filter,
             '-map', '0:v:0',
             '-map', '0:a:0?',
