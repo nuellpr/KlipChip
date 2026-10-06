@@ -44,6 +44,7 @@ Outh*.json
 /prisma/dev.db-shm
 /prisma/dev.db-wal
 /prisma/dev.db.bak*
+/prisma/ci.db*
 /public/downloads/
 
 # local tooling
