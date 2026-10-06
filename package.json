@@ -6,8 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "worker": "node scripts/render-runner.mjs"
+    "lint": "eslint .",
+    "worker": "node scripts/render-runner.mjs",
+    "test": "node scripts/test/run.mjs",
+    "test:e2e": "node scripts/test/run.mjs --e2e"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

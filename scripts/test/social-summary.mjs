@@ -14,8 +14,7 @@ if (!process.env.DATABASE_URL) {
 const stamp = Date.now();
 let mode = 'ok';
 const server = createServer((req, res) => {
-  let body = '';
-  req.on('data', (c) => { body += c; });
+  req.resume();
   req.on('end', () => {
     if (mode === 'fail500') { res.writeHead(500); res.end(); return; }
     if (mode === 'broken') {
@@ -40,6 +39,7 @@ process.env.FORGE_BASE_URL = `http://127.0.0.1:${port}/v1`;
 const { prisma } = await import('../../src/lib/prisma.ts');
 const { summarizeClipForSocial } = await import('../../src/lib/social-summary.ts');
 
+const seeded = [];
 async function seedClip() {
   const user = await prisma.user.create({ data: { email: `qa-t4-${stamp}-${Math.random().toString(36).slice(2)}@test.local`, name: 'T4' } });
   const clip = await prisma.clip.create({
@@ -50,7 +50,9 @@ async function seedClip() {
       captionsJson: JSON.stringify([{ startSeconds: 0, endSeconds: 2, text: 'halo gais' }]),
     },
   });
-  return { user, clip };
+  const row = { user, clip };
+  seeded.push(row);
+  return row;
 }
 async function wipe(r) {
   await prisma.clip.delete({ where: { id: r.clip.id } }).catch(() => {});
@@ -91,6 +93,7 @@ try {
 
   console.log('T4 SOCIAL: ALL PASS');
 } finally {
+  for (const r of seeded) await wipe(r);
   server.close();
   await prisma.$disconnect();
 }

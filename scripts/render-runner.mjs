@@ -164,10 +164,8 @@ async function processJob(job) {
     outBuf = lines.pop();
     for (const l of lines) if (l.trim()) void onLine(l);
   });
-  let errBuf = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => {
-    errBuf += chunk;
     tail = (tail + chunk).slice(-4000);
   });
   return await new Promise((resolveDone) => {
