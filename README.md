@@ -1,5 +1,7 @@
 # KlipChip — YouTube & Twitch ke Klip Vertikal 9:16
 
+[![CI](https://github.com/nuellpr/KlipChip/actions/workflows/ci.yml/badge.svg)](https://github.com/nuellpr/KlipChip/actions/workflows/ci.yml)
+
 Aplikasi web untuk mengubah video YouTube/Twitch menjadi klip pendek vertikal dengan auto-caption slang gaming Indonesia, deteksi highlight audio-spike & chat, dan pembayaran pay-per-clip.
 
 > PRD lengkap: `klipchip.md`
@@ -43,16 +45,30 @@ npm run dev
 ## Build & Production
 
 ```powershell
-npm run build   # lint + typecheck + build (wajib 0 error)
+npm run build   # produksi bundle (wajib 0 error)
 npm start       # jalankan hasil build di http://localhost:3000
 ```
 
-Lint terpisah:
+Cek kualitas (semuanya wajib 0 error, jalan di CI juga):
 
 ```powershell
-npx eslint src
-npx tsc --noEmit
+npm run lint      # eslint .
+npx tsc --noEmit  # typecheck
+npm test          # suite QA scripts/test/
 ```
+
+## Test
+
+`scripts/test/*.mjs` adalah skrip mandiri berbasis `node:assert` — bukan test framework.
+`npm test` menjalankan semuanya lewat `scripts/test/run.mjs` dan keluar non-zero kalau ada yang gagal.
+
+```powershell
+npm test           # 10 test, butuh DATABASE_URL saja
+npm run test:e2e   # + 3 test yang butuh dev server (localhost:3100) dan/atau python+ffmpeg
+```
+
+Test yang butuh `.env` membaca `DATABASE_URL` langsung dari file itu, jadi tidak perlu set manual.
+Beberapa test menulis fixture ke database lalu membersihkannya sendiri.
 
 ## Alur Penggunaan (5 Langkah Studio)
 
@@ -71,15 +87,21 @@ Dashboard (`/dashboard`) menampilkan riwayat klip, status render, invoice, retry
 | `/api/auth/login` | POST | Login / daftar dengan email |
 | `/api/auth/logout` | POST | Hapus session |
 | `/api/auth/me` | GET | User saat ini |
-| `/api/extract-metadata` | POST | Ambil metadata YouTube (oEmbed) + highlight mock |
+| `/api/auth/google` | GET | Mulai OAuth Google |
+| `/api/auth/google/callback` | GET | Callback OAuth Google |
+| `/api/extract-metadata` | POST | Metadata video + kandidat highlight (audio RMS asli) |
 | `/api/clips` | GET / POST | List & buat klip |
 | `/api/clips/[id]` | PATCH / DELETE | Update rating/status, hapus |
+| `/api/clips/[id]/status` | GET | Polling status render |
 | `/api/clips/[id]/download` | GET | Unduh file (hanya pemilik & completed) |
+| `/api/render-clip` | POST | Antrekan job render (diproses proses `npm run worker`) |
+| `/api/payments/packages` | POST | Ambil paket kredit |
 | `/api/payments/create` | POST | Buat transaksi pending |
 | `/api/payments/webhook` | POST | Webhook gateway (verifikasi HMAC) |
-| `/api/payments/simulate` | POST | Simulasi gateway (dev only) |
+| `/api/payments/simulate` | POST | Simulasi gateway (dev only, 404 di production) |
 | `/api/payments/[reference]` | GET | Polling status |
-| `/api/render-clip` | POST | Render final via Python worker |
+| `/api/payments/use-credit` | POST | Pakai saldo kredit |
+| `/api/admin/stats` | GET | Statistik admin |
 
 ## Keamanan
 
@@ -112,14 +134,14 @@ src/components/auth-gate.tsx
 
 - `cookies.txt` (untuk video privat/age-restricted) diletakkan di root dan otomatis di-ignore git.
 - Untuk PostgreSQL produksi, ganti `DATABASE_URL` ke `postgresql://...` dan `npx prisma db push`.
+- Deteksi **audio spike** memakai RMS envelope asli dari audio yang diunduh. Deteksi **chat velocity** masih *estimasi* dari kepadatan kata transcript (`buildChatVelocity` di `src/lib/transcript-analysis.ts`), bukan data chat asli.
+- Payment gateway belum terhubung ke penyedia sungguhan — `create` masih merakit string QRIS/VA sendiri dan webhook hanya dipicu `/api/payments/simulate` (nonaktif di production). Jangan industrialization sebelum integrasi gateway selesai.
 
 ## Catatan Produksi (Single VPS)
 
-- (a) Jalankan web dan worker di server yang sama: terminal pertama 
-pm run build && npm run start, terminal kedua 
-pm run worker (opsional: daftarkan keduanya di pm2/systemd, contoh satu baris pm2: pm2 start npm --name klipchip-worker -- run worker).
-- (b) Rate limiter masih in-memory � valid untuk satu instance; ganti ke Redis jika web dijalankan multi-instance.
-- (c) cookies.txt bersifat global & kedaluwarsa � perbarui manual saat YouTube mulai menolak render.
+- (a) Jalankan web dan worker di server yang sama: terminal pertama `npm run build && npm start`, terminal kedua `npm run worker` (opsional: daftarkan keduanya di pm2/systemd, contoh: `npm2 start npm --name klipchip-web -- start` dan `npm2 start npm --name klipchip-worker -- run worker`).
+- (b) Rate limiter masih in-memory → valid untuk satu instance; ganti ke Redis jika web dijalankan multi-instance.
+- (c) cookies.txt bersifat global & kedaluwarsa → perbarui manual saat YouTube mulai menolak render.
 - (d) Retensi storage: file hasil render lebih tua dari RETENTION_DAYS hari (default 7) dihapus otomatis oleh worker.
-- (e) Jika web dan worker dipisah host, migrasi SQLite?PostgreSQL WAJIB dilakukan dulu (SQLite tidak mendukung akses lintas mesin).
+- (e) Jika web dan worker dipisah host, migrasi SQLite → PostgreSQL WAJIB dilakukan dulu (SQLite tidak mendukung akses lintas mesin).
 - (f) Worker mengaktifkan WAL mode SQLite saat start secara otomatis (mengurangi SQLITE_BUSY antara webapp dan worker).
