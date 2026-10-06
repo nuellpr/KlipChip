@@ -122,8 +122,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
           "BOCIL",
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"dan kali ini Guys kita bakal main GTA online lagi bersama teman-teman dari online lagi bersama teman-teman dari\" â 1 slang terdeteksi di window ini.",
-        "chatSpikeReason": "Audio peak 100/100 â¢ 44 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"dan kali ini Guys kita bakal main GTA online lagi bersama teman-teman dari online lagi bersama teman-teman dari\" — 1 slang terdeteksi di window ini.",
+        "chatSpikeReason": "Audio peak 100/100 • 44 aktivitas/tdk pada momen ini"
       },
       {
         "id": "hl-video-1-2",
@@ -139,8 +139,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
           "BOCIL",
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"terus kapan dong terus kapan dong bukan ini salah salah bukan ke situ yang\" â 1 slang terdeteksi di window ini.",
-        "chatSpikeReason": "Audio peak 100/100 â¢ 22 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"terus kapan dong terus kapan dong bukan ini salah salah bukan ke situ yang\" — 1 slang terdeteksi di window ini.",
+        "chatSpikeReason": "Audio peak 100/100 • 22 aktivitas/tdk pada momen ini"
       },
       {
         "id": "hl-video-1-3",
@@ -156,8 +156,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
           "BOCIL",
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"kita absen dulu ada Sandy ada rijat ada kita absen dulu ada Sandy ada rijat ada Bocil morder Semoga tidak ada\" â 1 slang terdeteksi di window ini.",
-        "chatSpikeReason": "Audio peak 100/100 â¢ 30 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"kita absen dulu ada Sandy ada rijat ada kita absen dulu ada Sandy ada rijat ada Bocil morder Semoga tidak ada\" — 1 slang terdeteksi di window ini.",
+        "chatSpikeReason": "Audio peak 100/100 • 30 aktivitas/tdk pada momen ini"
       }
     ],
     "captionsMap": {
@@ -2195,8 +2195,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
         "tags": [
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"Seperti biasa, kita akan melawan Grenger di sini. Jadi langsung aja bikin sepatu di sini. Jadi langsung aja bikin sepatu\" â Momen dengan intensitas chat tertinggi.",
-        "chatSpikeReason": "Audio peak 100/100 â¢ 53 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"Seperti biasa, kita akan melawan Grenger di sini. Jadi langsung aja bikin sepatu di sini. Jadi langsung aja bikin sepatu\" — Momen dengan intensitas chat tertinggi.",
+        "chatSpikeReason": "Audio peak 100/100 • 53 aktivitas/tdk pada momen ini"
       },
       {
         "id": "hl-video-2-2",
@@ -2211,8 +2211,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
         "tags": [
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"kita bakal hajar, Guys. Oke, dia udah ngedes. Langsung aja ulti, ya. Kita ngedes. Langsung aja ulti, ya. Kita\" â Momen dengan intensitas chat tertinggi.",
-        "chatSpikeReason": "Audio peak 95/100 â¢ 54 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"kita bakal hajar, Guys. Oke, dia udah ngedes. Langsung aja ulti, ya. Kita ngedes. Langsung aja ulti, ya. Kita\" — Momen dengan intensitas chat tertinggi.",
+        "chatSpikeReason": "Audio peak 95/100 • 54 aktivitas/tdk pada momen ini"
       },
       {
         "id": "hl-video-2-3",
@@ -2227,8 +2227,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
         "tags": [
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"Tin. Nice. Sepatu armor. Jadi, nah kita boleh maju dikit-dikit, Guys. Buat apa? boleh maju dikit-dikit, Guys. Buat apa?\" â Momen dengan intensitas chat tertinggi.",
-        "chatSpikeReason": "Audio peak 100/100 â¢ 51 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"Tin. Nice. Sepatu armor. Jadi, nah kita boleh maju dikit-dikit, Guys. Buat apa? boleh maju dikit-dikit, Guys. Buat apa?\" — Momen dengan intensitas chat tertinggi.",
+        "chatSpikeReason": "Audio peak 100/100 • 51 aktivitas/tdk pada momen ini"
       }
     ],
     "captionsMap": {
@@ -5282,8 +5282,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
           "ANJIR",
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"Gila, sisa 1.000 dan tamat guys, tamat ya teman-teman ya. Alhamdulillah. Jangan ya teman-teman ya. Alhamdulillah. Jangan\" â 1 slang terdeteksi di window ini.",
-        "chatSpikeReason": "Audio peak 55/100 â¢ 37 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"Gila, sisa 1.000 dan tamat guys, tamat ya teman-teman ya. Alhamdulillah. Jangan ya teman-teman ya. Alhamdulillah. Jangan\" — 1 slang terdeteksi di window ini.",
+        "chatSpikeReason": "Audio peak 55/100 • 37 aktivitas/tdk pada momen ini"
       },
       {
         "id": "hl-video-3-2",
@@ -5298,8 +5298,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
         "tags": [
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"Kita kejar 6.000, ya. Harusnya kejar sih, Teman-teman. sih, Teman-teman.\" â Momen dengan intensitas chat tertinggi.",
-        "chatSpikeReason": "Audio peak 52/100 â¢ 49 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"Kita kejar 6.000, ya. Harusnya kejar sih, Teman-teman. sih, Teman-teman.\" — Momen dengan intensitas chat tertinggi.",
+        "chatSpikeReason": "Audio peak 52/100 • 49 aktivitas/tdk pada momen ini"
       },
       {
         "id": "hl-video-3-3",
@@ -5314,8 +5314,8 @@ export const PRESET_VIDEOS: PresetVideoItem[] = [
         "tags": [
           "Chat Hype"
         ],
-        "description": "Rangkuman dari transcript: \"kurengnya ya teman-teman ya. Jadi kayaknya yang paling benar kita nambah kayaknya yang paling benar kita nambah\" â Momen dengan intensitas chat tertinggi.",
-        "chatSpikeReason": "Audio peak 44/100 â¢ 47 aktivitas/tdk pada momen ini"
+        "description": "Rangkuman dari transcript: \"kurengnya ya teman-teman ya. Jadi kayaknya yang paling benar kita nambah kayaknya yang paling benar kita nambah\" — Momen dengan intensitas chat tertinggi.",
+        "chatSpikeReason": "Audio peak 44/100 • 47 aktivitas/tdk pada momen ini"
       }
     ],
     "captionsMap": {
