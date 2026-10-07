@@ -34,8 +34,13 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 
-process.env.FORGE_API_KEY = 'qa-key';
-process.env.FORGE_BASE_URL = `http://127.0.0.1:${port}/v1`;
+// ai-provider.ts prioritise OPENROUTER_* di atas FORGE_*, dan env tingkat OS bisa
+// menimpa apa pun. Stub harus pakai nama berprioritas tinggi supaya tidak
+// menembak API sungguhan.
+process.env.OPENROUTER_API_KEY = 'qa-key';
+process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${port}/v1`;
+delete process.env.FORGE_API_KEY;
+delete process.env.FORGE_BASE_URL;
 const { prisma } = await import('../../src/lib/prisma.ts');
 const { summarizeClipForSocial } = await import('../../src/lib/social-summary.ts');
 
@@ -85,11 +90,12 @@ try {
   console.log('[PASS] JSON rusak -> false');
 
   // Failure: tanpa API key -> false tanpa panggil jaringan
+  delete process.env.OPENROUTER_API_KEY;
   delete process.env.FORGE_API_KEY;
   r = await seedClip();
   assert.equal(await summarizeClipForSocial(r.clip.id), false, 'tanpa key harus false');
-  console.log('[PASS] tanpa FORGE_API_KEY -> false (skip total)');
-  process.env.FORGE_API_KEY = 'qa-key';
+  console.log('[PASS] tanpa API key -> false (skip total)');
+  process.env.OPENROUTER_API_KEY = 'qa-key';
 
   console.log('T4 SOCIAL: ALL PASS');
 } finally {

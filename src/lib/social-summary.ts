@@ -1,6 +1,6 @@
 import { prisma } from './prisma.ts';
+import { aiHeaders, getAiApiKey, getAiBaseUrl, getAiModels, isAiConfigured } from './ai-provider.ts';
 
-const FORGE_BASE_URL = process.env.FORGE_BASE_URL || 'https://run.forgeapi.org/v1';
 const CONTEXT_BUDGET = 4000;
 
 interface SocialCopy {
@@ -15,28 +15,25 @@ interface SocialPackage {
 }
 
 function modelCandidates(): string[] {
-  const list = [process.env.FORGE_MODEL || 'MiniMax-M3', process.env.FORGE_MODEL_FALLBACK || '']
-    .map((m) => m.trim())
-    .filter(Boolean);
-  return [...new Set(list)];
+  return [...new Set(getAiModels())];
 }
 
-async function forgeChat(content: string): Promise<string | null> {
-  const apiKey = process.env.FORGE_API_KEY;
+async function aiChat(content: string): Promise<string | null> {
+  const apiKey = getAiApiKey();
   if (!apiKey) return null;
   for (const model of modelCandidates()) {
-    const out = await forgeChatOnce(content, apiKey, model);
+    const out = await aiChatOnce(content, apiKey, model);
     if (out !== null) return out;
   }
   return null;
 }
 
-async function forgeChatOnce(content: string, apiKey: string, model: string): Promise<string | null> {
+async function aiChatOnce(content: string, apiKey: string, model: string): Promise<string | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`${FORGE_BASE_URL}/chat/completions`, {
+      const res = await fetch(`${getAiBaseUrl()}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: aiHeaders(apiKey),
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content }],
@@ -60,7 +57,7 @@ async function forgeChatOnce(content: string, apiKey: string, model: string): Pr
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
-      console.warn(`[Forge] degraded (model=${model}):`, err instanceof Error ? err.message : err);
+      console.warn(`[ai] degraded (model=${model}):`, err instanceof Error ? err.message : err);
       return null;
     }
   }
@@ -81,7 +78,7 @@ function clampCopy(raw: unknown): SocialCopy | null {
 
 export async function summarizeClipForSocial(clipId: string): Promise<boolean> {
   try {
-    if (!process.env.FORGE_API_KEY) return false;
+    if (!isAiConfigured()) return false;
     const clip = await prisma.clip.findUnique({ where: { id: clipId } });
     if (!clip) return false;
 
@@ -100,7 +97,7 @@ export async function summarizeClipForSocial(clipId: string): Promise<boolean> {
     }
     if (!context.trim()) context = `Judul video: ${clip.videoTitle} oleh ${clip.channelName}.\n`;
 
-    const content = await forgeChat(
+    const content = await aiChat(
       `Kamu ahli social media untuk konten gaming pendek. Berdasarkan transkrip klip berikut, buat SATU paket copy bahasa Indonesia gaya viral untuk tiga platform.\n\n` +
       `Transkrip:\n${context}\n` +
       `Balas HANYA JSON valid dengan bentuk persis:\n` +

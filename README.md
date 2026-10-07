@@ -13,6 +13,7 @@ Aplikasi web untuk mengubah video YouTube/Twitch menjadi klip pendek vertikal de
 - **Auth**: Session cookie httpOnly HMAC-SHA256 (magic-link / Google placeholder)
 - **Payments**: Mayar (Request Payment v2) — checkout di halaman Mayar, status masuk via webhook yang diverifikasi ulang ke API Mayar (HMAC webhook internal sudah dihapus, Mayar tidak menandatangani webhook)
 - **Video**: Python worker (`scripts/clip_worker.py`) + `yt-dlp` + FFmpeg 7.1 (crop 9:16 + burn caption ASS karaoke)
+- **AI**: OpenRouter (endpoint OpenAI-compatible) untuk skor highlight, terjemahan bilingual, dan ringkasan sosmed. Model default `apodex/apodex-1.1-mini:free`. Tanpa API key, semua fitur ini otomatis jatuh ke heuristik lokal.
 
 ## Prasyarat
 
@@ -136,6 +137,8 @@ src/components/auth-gate.tsx
 - `cookies.txt` (untuk video privat/age-restricted) diletakkan di root dan otomatis di-ignore git.
 - Untuk PostgreSQL produksi, ganti `DATABASE_URL` ke `postgresql://...` dan `npx prisma db push`.
 - Deteksi **audio spike** memakai RMS envelope asli dari audio yang diunduh. Deteksi **chat velocity** masih *estimasi* dari kepadatan kata transcript (`buildChatVelocity` di `src/lib/transcript-analysis.ts`), bukan data chat asli.
+- Konfigurasi AI terpusat di `src/lib/ai-provider.ts`. Nama env lama (`FORGE_API_KEY`, `FORGE_BASE_URL`, `FORGE_MODEL`) masih diterima sebagai cadangan, jadi `.env` yang sudah ada tidak perlu diedit.
+- `apodex/apodex-1.1-mini:free` adalah model **reasoning-first**: pengukuran pertama memakai ~1000 token hanya untuk berpikir. Kalau sering kena `finish_reason=length` (JSON terpotong), ganti `MODEL_NAME` ke model yang lebih ringan atau persingkat prompt.
 - Pembayaran memakai **Mayar Request Payment v2**. Kalau `MAYAR_API_KEY` belum diisi atau ditolak Mayar (401/403), checkout otomatis jatuh ke jalur konfirmasi lokal — jadi demo lokal tetap jalan tanpa kredensial. Di production kredensial salah akan **gagal keras**, bukan diam-diam memberi klip gratis.
 
 ## Catatan Produksi (Single VPS)

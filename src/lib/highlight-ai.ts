@@ -1,8 +1,9 @@
 /**
- * Highlight AI via Forge Gateway (OpenAI-compatible).
+ * Highlight AI lewat provider OpenAI-compatible (default OpenRouter).
  * Dipakai di /api/extract-metadata untuk skor golden momen.
- * Jika FORGE_API_KEY tidak diisi, fallback ke heuristik lokal.
+ * Kalau API key tidak diisi, fallback ke heuristik lokal.
  */
+import { aiHeaders, getAiApiKey, getAiBaseUrl, getAiModels, isAiConfigured } from './ai-provider.ts';
 
 export interface TranscriptSegment {
   startSeconds: number;
@@ -19,76 +20,61 @@ export interface AiHighlight {
   description: string;
 }
 
-const FORGE_BASE_URL = process.env.FORGE_BASE_URL || 'https://run.forgeapi.org/v1';
-const DEFAULT_MODEL = 'MiniMax-M3'; // Free tier yang benar-benar jalan dengan saldo $0 (tested OK), 1M context
-const FORGE_TIMEOUT_MS = 30_000;
-const FORGE_MAX_ATTEMPTS = 2;
-const FORGE_BACKOFF_MS = 1500;
+const AI_TIMEOUT_MS = 30_000;
+const AI_MAX_ATTEMPTS = 2;
+const AI_BACKOFF_MS = 1500;
 
 /**
- * Fetch Forge dengan timeout + 1 retry (total maks 2 percobaan).
+ * Fetch ke provider AI dengan timeout + 1 retry (total maks 2 percobaan).
  * Retry HANYA untuk network error/AbortError/HTTP 429/5xx; error HTTP lain
  * langsung null. Gagal total → log degradasi eksplisit → null (heuristik lokal
  * yang melanjutkan).
  */
-async function forgeFetchWithRetry(
+async function aiFetchWithRetry(
   body: string,
   apiKey: string,
   model: string
 ): Promise<Response | null> {
   let lastReason = 'unknown';
-  for (let attempt = 1; attempt <= FORGE_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(`${FORGE_BASE_URL}/chat/completions`, {
+      const res = await fetch(`${getAiBaseUrl()}/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: aiHeaders(apiKey),
         body,
-        signal: AbortSignal.timeout(FORGE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(AI_TIMEOUT_MS),
       });
       if (res.ok) return res;
       if (res.status !== 429 && res.status < 500) {
         const errText = await res.text();
-        console.warn(`[Forge] ${model} error ${res.status}:`, errText.slice(0, 300));
+        console.warn(`[ai] ${model} error ${res.status}:`, errText.slice(0, 300));
         return null;
       }
       lastReason = `HTTP ${res.status}`;
     } catch (e) {
       lastReason = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     }
-    if (attempt < FORGE_MAX_ATTEMPTS) {
-      await new Promise((r) => setTimeout(r, FORGE_BACKOFF_MS));
+    if (attempt < AI_MAX_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, AI_BACKOFF_MS));
     }
   }
   console.warn(
-    `[Forge] degraded ke heuristik lokal setelah ${FORGE_MAX_ATTEMPTS} percobaan: ${lastReason}`
+    `[ai] degraded ke heuristik lokal setelah ${AI_MAX_ATTEMPTS} percobaan: ${lastReason}`
   );
   return null;
 }
 
-function getForgeConfig() {
-  return {
-    apiKey: process.env.FORGE_API_KEY || '',
-    models: [process.env.FORGE_MODEL || DEFAULT_MODEL, process.env.FORGE_MODEL_FALLBACK || '']
-      .map((m) => m.trim())
-      .filter(Boolean),
-  };
-}
-
-export function isForgeConfigured(): boolean {
-  return !!getForgeConfig().apiKey;
-}
+export { isAiConfigured };
 
 /**
- * Panggil Forge untuk skor highlight. Mengembalikan 3 highlight terbaik atau null jika gagal.
+ * Panggil AI untuk skor highlight. Mengembalikan 3 highlight terbaik atau null jika gagal.
  */
-export async function generateHighlightsWithForge(
+export async function generateAiHighlights(
   segments: TranscriptSegment[],
   videoMeta: { title: string; channelName: string; durationSeconds: number }
 ): Promise<AiHighlight[] | null> {
-  const { apiKey, models } = getForgeConfig();
+  const apiKey = getAiApiKey();
+  const models = getAiModels();
   if (!apiKey) return null;
   if (segments.length === 0) return null;
 
@@ -128,8 +114,9 @@ Pilih 3 golden momen:`;
 
   try {
     let res: Response | null = null;
+    let usedModel = models[0] ?? '';
     for (const model of models) {
-      res = await forgeFetchWithRetry(
+      res = await aiFetchWithRetry(
         JSON.stringify({
           model,
           messages: [
@@ -142,17 +129,35 @@ Pilih 3 golden momen:`;
         apiKey,
         model
       );
-      if (res) break;
+      if (res) {
+        usedModel = model;
+        break;
+      }
     }
     if (!res) return null;
 
     const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
+      choices?: { finish_reason?: string; message?: { content?: string } }[];
     };
-    const content = data.choices?.[0]?.message?.content;
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
     if (!content) return null;
 
-    const parsed = JSON.parse(content) as { highlights?: AiHighlight[] };
+    // Model reasoning-first (mis. apodex-*) memakai porsi besar output untuk
+    // thinking, jadi JSON kadang terpotong -> JSON.parse melempar.
+    // Perlakukan sebagai kegagalan biasa agar pemanggil jatuh ke heuristik lokal.
+    if (choice?.finish_reason === 'length') {
+      console.warn(`[ai] ${usedModel} output terpotong (finish_reason=length)`);
+      return null;
+    }
+
+    let parsed: { highlights?: AiHighlight[] };
+    try {
+      parsed = JSON.parse(content) as { highlights?: AiHighlight[] };
+    } catch (e) {
+      console.warn(`[ai] ${usedModel} balas bukan JSON:`, e instanceof Error ? e.message : e);
+      return null;
+    }
     if (!Array.isArray(parsed.highlights) || parsed.highlights.length === 0) return null;
 
     // Validasi & clamp
@@ -174,7 +179,7 @@ Pilih 3 golden momen:`;
 
     return validated.length >= 1 ? validated : null;
   } catch (e) {
-    console.warn('[Forge] highlight AI gagal, fallback heuristik:', e);
+    console.warn('[ai] highlight AI gagal, fallback heuristik:', e);
     return null;
   }
 }

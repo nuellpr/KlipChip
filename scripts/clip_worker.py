@@ -336,16 +336,27 @@ def clean_ass_text(text, uppercase):
     return t.strip()
 
 
+def _env(*names):
+    """Nilai env pertama yang terisi. Mendukung penamaan OpenRouter & Forge."""
+    for name in names:
+        value = (os.environ.get(name) or '').strip()
+        if value:
+            return value
+    return ''
+
+
 def translate_lines(lines, target):
-    """Terjemahkan baris caption via Forge (batch hemat panggilan).
+    """Terjemahkan baris caption via provider AI (batch hemat panggilan).
     Gagal apa pun -> [] agar render berbayar lanjut single-track."""
     try:
-        api_key = os.environ.get('FORGE_API_KEY') or ''
+        api_key = _env('OPENROUTER_API_KEY', 'FORGE_API_KEY')
         if not api_key or not lines:
             return []
-        base_url = (os.environ.get('FORGE_BASE_URL') or 'https://run.forgeapi.org/v1').rstrip('/')
-        models = [os.environ.get('FORGE_MODEL') or 'MiniMax-M3']
-        fb = (os.environ.get('FORGE_MODEL_FALLBACK') or '').strip()
+        base_url = (_env('OPENROUTER_BASE_URL', 'FORGE_BASE_URL')
+                    or 'https://openrouter.ai/api/v1').rstrip('/')
+        models = [_env('MODEL_NAME', 'OPENROUTER_MODEL', 'FORGE_MODEL')
+                  or 'apodex/apodex-1.1-mini:free']
+        fb = _env('OPENROUTER_MODEL_FALLBACK', 'FORGE_MODEL_FALLBACK')
         if fb and fb not in models:
             models.append(fb)
         capped = [str(t or '') for t in lines][:120]
@@ -364,13 +375,21 @@ def translate_lines(lines, target):
                 ok = False
                 for attempt in range(2):
                     try:
+                        req_headers = {
+                            'Content-Type': 'application/json',
+                            'Authorization': f'Bearer {api_key}',
+                        }
+                        if 'forgeapi.org' not in base_url:
+                            # OpenRouter memakai header ini untuk identifikasi app.
+                            req_headers['HTTP-Referer'] = 'https://klipchip.app'
+                            req_headers['X-Title'] = 'KlipChip'
                         req = urllib.request.Request(
                             base_url + '/chat/completions',
                             data=json.dumps({
                                 'model': model,
                                 'messages': [{'role': 'user', 'content': prompt}],
                             }).encode('utf-8'),
-                            headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                            headers=req_headers,
                             method='POST',
                         )
                         with urllib.request.urlopen(req, timeout=30) as resp:

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { CaptionLine, TranscriptSegment } from '@/lib/types';
-import { generateHighlightsWithForge, isForgeConfigured } from '@/lib/highlight-ai';
+import { generateAiHighlights, isAiConfigured } from '@/lib/highlight-ai';
 import {
   analyzeAudioWindows,
   AudioEnvelope,
@@ -203,15 +203,15 @@ export async function POST(req: NextRequest) {
       | { startSeconds: number; endSeconds: number; totalScore: number; title: string; tags: string[]; description: string }[]
       | null = null;
 
-    if (isForgeConfigured() && transcript.length >= 3) {
+    if (isAiConfigured() && transcript.length >= 3) {
       try {
-        aiRaw = await generateHighlightsWithForge(
+        aiRaw = await generateAiHighlights(
           transcript.map((t) => ({ startSeconds: t.startSeconds, endSeconds: t.endSeconds, text: t.text })),
           { title, channelName, durationSeconds }
         );
         if (aiRaw && aiRaw.length > 0) usedAi = true;
       } catch (e) {
-        console.warn('[Forge] highlight AI gagal:', e);
+        console.warn('[ai] highlight AI gagal:', e);
       }
     }
 

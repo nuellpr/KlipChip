@@ -39,8 +39,12 @@ const server = createServer((req, res) => {
   });
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
-process.env.FORGE_API_KEY = 'qa-key';
-process.env.FORGE_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
+// ai-provider.ts prioritise OPENROUTER_* di atas FORGE_*, dan env tingkat OS bisa
+// menimpa apa pun. Stub harus pakai nama berprioritas tinggi.
+process.env.OPENROUTER_API_KEY = 'qa-key';
+process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
+delete process.env.FORGE_API_KEY;
+delete process.env.FORGE_BASE_URL;
 
 const { prisma } = await import('../../src/lib/prisma.ts');
 

@@ -133,8 +133,8 @@ try {
   console.log('[PASS] fetchPaymentRequest: paid / unpaid / data kosong');
 
 // --- key kosong harus gagal dengan pesan yang bisa ditindaklanjuti ---
-  // Node 24 otomatis memuat .env, jadi kedua nama harus dibersihkan eksplisit
-  // supaya jalur "belum terkonfigurasi" benar-benar teruji.
+  // Key asli bisa datang dari .env maupun env tingkat OS, jadi kedua nama
+  // variabel dibersihkan eksplisit agar jalur "belum terkonfigurasi" teruji.
   delete process.env.MAYAR_API_TOKEN;
   delete process.env.MAYAR_API_KEY;
 

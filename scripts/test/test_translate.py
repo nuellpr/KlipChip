@@ -52,14 +52,19 @@ def main():
     port = server.server_address[1]
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
-    os.environ['FORGE_API_KEY'] = 'test-key'
-    os.environ['FORGE_BASE_URL'] = f'http://127.0.0.1:{port}/v1'
-    os.environ.pop('FORGE_MODEL', None)
+    # PENTING: clip_worker._env() prioritise OPENROUTER_* di atas FORGE_*.
+    # Kalau stub hanya di-set lewat FORGE_*, .env asli akan menang dan test
+    # menembak OpenRouter sungguhan.
+    os.environ['OPENROUTER_API_KEY'] = 'test-key'
+    os.environ['OPENROUTER_BASE_URL'] = f'http://127.0.0.1:{port}/v1'
+    os.environ.pop('MODEL_NAME', None)
+    os.environ.pop('FORGE_API_KEY', None)
+    os.environ.pop('FORGE_BASE_URL', None)
 
     # 1. Skip total tanpa API key
-    del os.environ['FORGE_API_KEY']
+    del os.environ['OPENROUTER_API_KEY']
     assert translate_lines(['halo'], 'en') == [], 'tanpa key harus []'
-    os.environ['FORGE_API_KEY'] = 'test-key'
+    os.environ['OPENROUTER_API_KEY'] = 'test-key'
 
     # 2. 40 baris -> tepat 2 panggilan (batch 22 + 18), hasil terindex benar
     FakeForge.calls.clear()
