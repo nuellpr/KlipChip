@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getCreditPackage } from '@/lib/payments';
-import { createPaymentRequest, MayarError } from '@/lib/mayar';
+import { createPaymentRequest, isMayarConfigured, mayFallBackToLocal, MayarError } from '@/lib/mayar';
 
 // POST /api/payments/packages — beli paket kredit (top-up saldo)
 export async function POST(req: NextRequest) {
@@ -33,21 +33,34 @@ export async function POST(req: NextRequest) {
     const reference = `KC-PKG-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    let mayar;
-    try {
-      mayar = await createPaymentRequest({
-        name: `KlipChip ${pkg.credits} kredit`,
-        amount: pkg.priceIdr,
-        email: user.email,
-        description: `${pkg.credits} kredit KlipChip`,
-        expiredAt: expiresAt,
-        extraData: { reference, packageCode: pkg.code },
-      });
-    } catch (err) {
-      if (err instanceof MayarError) {
-        return NextResponse.json({ error: err.message }, { status: err.status });
+    // Tanpa Mayar, transaksi tetap dicatat lokal dan konfirmasi lewat mode dev.
+    const gatewayConfigured = isMayarConfigured();
+    let payLink: string | null = null;
+    let mayarPaymentId: string | null = null;
+
+    if (gatewayConfigured) {
+      try {
+        const mayar = await createPaymentRequest({
+          name: `KlipChip ${pkg.credits} kredit`,
+          amount: pkg.priceIdr,
+          email: user.email,
+          description: `${pkg.credits} kredit KlipChip`,
+          expiredAt: expiresAt,
+          extraData: { reference, packageCode: pkg.code },
+        });
+        payLink = mayar.link;
+        mayarPaymentId = mayar.id;
+      } catch (err) {
+        if (err instanceof MayarError) {
+          if (mayFallBackToLocal(err)) {
+            console.warn(`[payments] Mayar tidak dipakai, konfirmasi lokal: ${err.message}`);
+          } else {
+            return NextResponse.json({ error: err.message }, { status: err.status });
+          }
+        } else {
+          throw err;
+        }
       }
-      throw err;
     }
 
     const payment = await prisma.payment.create({
@@ -60,8 +73,8 @@ export async function POST(req: NextRequest) {
         method,
         status: 'pending',
         providerReference: reference,
-        mayarPaymentId: mayar.id,
-        payLink: mayar.link,
+        mayarPaymentId,
+        payLink,
       },
     });
 
@@ -75,7 +88,8 @@ export async function POST(req: NextRequest) {
           packageCode: payment.packageCode,
           creditAmount: payment.creditAmount,
         },
-        payLink: mayar.link,
+        payLink,
+        gatewayConfigured,
         expiresAt: expiresAt.toISOString(),
       },
       { status: 201 }

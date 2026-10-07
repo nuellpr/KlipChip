@@ -136,6 +136,7 @@ src/components/auth-gate.tsx
 - `cookies.txt` (untuk video privat/age-restricted) diletakkan di root dan otomatis di-ignore git.
 - Untuk PostgreSQL produksi, ganti `DATABASE_URL` ke `postgresql://...` dan `npx prisma db push`.
 - Deteksi **audio spike** memakai RMS envelope asli dari audio yang diunduh. Deteksi **chat velocity** masih *estimasi* dari kepadatan kata transcript (`buildChatVelocity` di `src/lib/transcript-analysis.ts`), bukan data chat asli.
+- Pembayaran memakai **Mayar Request Payment v2**. Kalau `MAYAR_API_KEY` belum diisi atau ditolak Mayar (401/403), checkout otomatis jatuh ke jalur konfirmasi lokal — jadi demo lokal tetap jalan tanpa kredensial. Di production kredensial salah akan **gagal keras**, bukan diam-diam memberi klip gratis.
 
 ## Catatan Produksi (Single VPS)
 

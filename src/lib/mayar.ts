@@ -49,14 +49,45 @@ export class MayarError extends Error {
 
 /** Token API Mayar. Tidak ada default — payment yang tak terkonfigurasi harus gagal keras. */
 export function getMayarToken(): string {
-  const token = process.env.MAYAR_API_TOKEN?.trim();
+  const token = process.env.MAYAR_API_TOKEN?.trim() || process.env.MAYAR_API_KEY?.trim();
   if (!token) {
     throw new MayarError(
-      'MAYAR_API_TOKEN belum diset. Ambil dari Mayar > Integration > API Key (sandbox: web.mayar.io).',
+      'API key Mayar belum diset. Ambil dari Mayar > Integration > API Key, lalu taruh di MAYAR_API_KEY (sandbox: web.mayar.io).',
       503
     );
   }
   return token;
+}
+
+/**
+ * true kalau Mayar siap dipakai.
+ *
+ * Alur pembayaran memakai ini untuk menentukan apakah bisa lewat gateway atau
+ * harus jatuh ke konfirmasi lokal -- key yang belum diisi menjatuhkan mode,
+ * bukan menggagalkan checkout.
+ *
+ * Dua nama variabel diterima karena dashboard Mayar menyebutnya "API Key"
+ * sementara sebagian dokumentasi memakai "token".
+ */
+export function isMayarConfigured(): boolean {
+  return Boolean(process.env.MAYAR_API_TOKEN?.trim() || process.env.MAYAR_API_KEY?.trim());
+}
+
+/**
+ * true kalau error itu soal kredensial (401/403), bukan server Mayar yang salah.
+ * Penyebab paling umum: key produksi dipakai ke domain sandbox, atau sebaliknya.
+ */
+export function isCredentialError(err: unknown): boolean {
+  return err instanceof MayarError && (err.status === 401 || err.status === 403);
+}
+
+/**
+ * Apakah kegagalan gateway boleh diabaikan dan jatuh ke konfirmasi lokal.
+ * Hanya di luar production: di production kredensial salah harus keras
+ * gagal, bukan diam-diam memberi klip gratis.
+ */
+export function mayFallBackToLocal(err: unknown): boolean {
+  return isCredentialError(err) && process.env.NODE_ENV !== 'production';
 }
 
 /** true kalau memakai domain sandbox (api.mayar.io), bukan produksi. */
@@ -68,9 +99,19 @@ function baseUrl(): string {
   return process.env.MAYAR_API_BASE?.trim() || (isSandbox() ? SANDBOX_BASE : PROD_BASE);
 }
 
+/** Host saja untuk pesan error, tanpa path. */
+function host(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   const token = getMayarToken();
-  const url = `${baseUrl()}${path}`;
+  const base = baseUrl();
+  const url = `${base}${path}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -89,7 +130,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
     // Hanya kegagalan jaringan yang masuk sini. Kesalahan konfigurasi (token)
     // sudah divalidasi sebelum try supaya tidak tersamar jadi "gagal jaringan".
     const reason = err instanceof Error && err.name === 'AbortError' ? 'timeout' : 'tidak bisa menghubungi Mayar';
-    throw new MayarError(`Gagal memanggil Mayar (${reason})`, 502);
+    throw new MayarError(`Gagal memanggil Mayar di ${host(base)} (${reason})`, 502);
   } finally {
     clearTimeout(timer);
   }
@@ -99,12 +140,14 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   try {
     body = JSON.parse(text);
   } catch {
-    throw new MayarError(`Respons Mayar bukan JSON (HTTP ${res.status})`, 502);
+    throw new MayarError(`Respons Mayar dari ${host(base)} bukan JSON (HTTP ${res.status})`, 502);
   }
 
   if (!res.ok || (body.statusCode !== undefined && body.statusCode >= 400)) {
     const code = res.status;
-    throw new MayarError(body.messages || `Mayar menolak permintaan (HTTP ${res.status})`, code);
+    // Host ikut disebut supaya salah sandbox/produksi kelihatan dari log.
+    const detail = body.messages || `HTTP ${res.status}`;
+    throw new MayarError(`Mayar ${host(base)} menolak: ${detail}`, code);
   }
 
   return body.data;
