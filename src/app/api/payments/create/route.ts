@@ -3,53 +3,13 @@ import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
-
-const VALID_METHODS = [
-  'qris',
-  'gopay',
-  'ovo',
-  'dana',
-  'shopeepay',
-  'bca_va',
-  'mandiri_va',
-  'bri_va',
-  'bni_va',
-];
+import { createPaymentRequest, MayarError } from '@/lib/mayar';
 
 function generateReference(): string {
   return `KC-PAY-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
 }
 
-function buildGatewayPayload(method: string, reference: string, amountIdr: number) {
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-  if (method === 'qris') {
-    return {
-      type: 'qris',
-      qrString: `00020101021126580014ID.KLIPCHIP.WWW01189360000201100000000215${reference}053033605404${amountIdr}5802ID5915KLIPCHIP INDO6007JAKARTA62070703A016304X`,
-      expiresAt,
-    };
-  }
-
-  if (method.includes('_va')) {
-    const bank = method.replace('_va', '').toUpperCase();
-    const vaNumber = `8801${crypto.randomInt(100000000000, 999999999999)}`;
-    return {
-      type: 'virtual_account',
-      bank,
-      vaNumber,
-      expiresAt,
-    };
-  }
-
-  return {
-    type: 'ewallet',
-    wallet: method.toUpperCase(),
-    expiresAt,
-  };
-}
-
-// POST /api/payments/create — buat transaksi pembayaran untuk sebuah klip
+// POST /api/payments/create — buat request payment di Mayar untuk sebuah klip
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -66,7 +26,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const clipId = typeof body.clipId === 'string' ? body.clipId : '';
-    const method = VALID_METHODS.includes(body.method) ? body.method : 'qris';
+    const method = typeof body.method === 'string' ? body.method : 'qris';
 
     const clip = await prisma.clip.findUnique({
       where: { id: clipId },
@@ -82,26 +42,42 @@ export async function POST(req: NextRequest) {
       if (clip.payment.status === 'paid') {
         return NextResponse.json({ error: 'Klip ini sudah dibayar' }, { status: 409 });
       }
-      if (clip.payment.status === 'pending') {
-        const updated = await prisma.payment.update({
-          where: { id: clip.payment.id },
-          data: { method },
-        });
+      if (clip.payment.status === 'pending' && clip.payment.payLink) {
         return NextResponse.json({
           payment: {
-            reference: updated.providerReference,
-            status: updated.status,
-            method: updated.method,
-            amountIdr: updated.amountIdr,
+            reference: clip.payment.providerReference,
+            status: clip.payment.status,
+            method: clip.payment.method,
+            amountIdr: clip.payment.amountIdr,
           },
-          gateway: buildGatewayPayload(method, updated.providerReference, updated.amountIdr),
+          // Link checkout milik Mayar; status final datang lewat webhook.
+          payLink: clip.payment.payLink,
         });
       }
-      // status failed/refunded → hapus agar bisa dibuat ulang
+      // pending tanpa link / failed / refunded → hapus agar bisa dibuat ulang
       await prisma.payment.delete({ where: { id: clip.payment.id } });
     }
 
     const reference = generateReference();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    let mayar;
+    try {
+      mayar = await createPaymentRequest({
+        name: `KlipChip ${clip.name}`.slice(0, 120),
+        amount: clip.priceIdr,
+        email: user.email,
+        description: `Klip 9:16 - ${clip.videoTitle ?? clip.name}`,
+        expiredAt: expiresAt,
+        extraData: { reference, clipId: clip.id },
+      });
+    } catch (err) {
+      if (err instanceof MayarError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
+    }
+
     const payment = await prisma.payment.create({
       data: {
         userId: user.id,
@@ -110,6 +86,8 @@ export async function POST(req: NextRequest) {
         method,
         status: 'pending',
         providerReference: reference,
+        mayarPaymentId: mayar.id,
+        payLink: mayar.link,
       },
     });
 
@@ -121,7 +99,8 @@ export async function POST(req: NextRequest) {
           method: payment.method,
           amountIdr: payment.amountIdr,
         },
-        gateway: buildGatewayPayload(method, reference, clip.priceIdr),
+        payLink: mayar.link,
+        expiresAt: expiresAt.toISOString(),
       },
       { status: 201 }
     );

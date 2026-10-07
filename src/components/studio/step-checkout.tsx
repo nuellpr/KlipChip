@@ -7,8 +7,6 @@ import {
   QrCode, 
   Wallet, 
   Building2, 
-  Check, 
-  Copy, 
   Clock, 
   ArrowLeft, 
   Zap,
@@ -39,11 +37,49 @@ export function StepCheckout({
 }: StepCheckoutProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('qris');
   const [useCredit, setUseCredit] = useState<boolean>(isUnlimitedCredits || balanceClips > 0);
-  const [copied, setCopied] = useState(false);
   const [isProcessingPay, setIsProcessingPay] = useState(false);
   const [payError, setPayError] = useState('');
   const [payStatusText, setPayStatusText] = useState('');
   const [countdownSec, setCountdownSec] = useState(900); // 15:00 countdown timer
+  // Reference pembayaran yang ditinggalkan sebelum user diarahkan ke Mayar.
+  const [returningRef, setReturningRef] = useState<string>('');
+  const [isCheckingReturn, setIsCheckingReturn] = useState(false);
+
+  // Bangun kembali setelah user kembali dari halaman checkout Mayar.
+  useEffect(() => {
+    const pending = sessionStorage.getItem('klipchip:pendingPayment');
+    if (pending) {
+      sessionStorage.removeItem('klipchip:pendingPayment');
+      setReturningRef(pending);
+    }
+  }, []);
+
+  const checkReturnedPayment = async () => {
+    if (!returningRef) return;
+    setIsCheckingReturn(true);
+    setPayError('');
+    setPayStatusText('Memeriksa status pembayaran...');
+    try {
+      const finalStatus = await pollPaymentStatus(returningRef);
+      if (finalStatus === 'paid') {
+        setPayStatusText('');
+        setReturningRef('');
+        setIsCheckingReturn(false);
+        onPaymentSuccess(selectedMethod, returningRef);
+        return;
+      }
+      throw new Error(
+        finalStatus === 'failed'
+          ? 'Pembayaran dibatalkan di Mayar.'
+          : 'Pembayaran belum terdeteksi. Kalau baru saja membayar, tunggu beberapa detik lalu coba lagi.'
+      );
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : 'Gagal memeriksa status pembayaran.');
+    } finally {
+      setIsCheckingReturn(false);
+      setPayStatusText('');
+    }
+  };
 
   // Countdown ticker
   useEffect(() => {
@@ -57,12 +93,6 @@ export function StepCheckout({
     const mins = Math.floor(s / 60);
     const secs = s % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
   };
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -124,9 +154,19 @@ export function StepCheckout({
       }
 
       const reference = createData.payment.reference;
-      setPayStatusText('Menunggu konfirmasi payment gateway (QRIS/VA)...');
+      const payLink = typeof createData.payLink === 'string' ? createData.payLink : '';
 
-      // 2) Simulasikan gateway (dev): kirim webhook ber-signature ke server
+      // Terkonfigurasi Mayar -> pengguna bayar di halaman checkout Mayar.
+      if (payLink) {
+        sessionStorage.setItem('klipchip:pendingPayment', reference);
+        setIsProcessingPay(false);
+        setPayStatusText('');
+        window.location.href = payLink;
+        return;
+      }
+
+      // Tanpa Mayar (dev/demo): jalankan jalur konfirmasi lokal.
+      setPayStatusText('Mode demo: mengonfirmasi pembayaran secara lokal...');
       const simRes = await fetch('/api/payments/simulate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -231,103 +271,53 @@ export function StepCheckout({
               </button>
             </div>
 
-            {/* Method Details Display */}
-            {selectedMethod === 'qris' && (
-              <div className="rounded-2xl border border-white/10 bg-zinc-950 p-5 text-center space-y-3">
-                <div className="flex items-center justify-between text-xs text-zinc-400 border-b border-white/5 pb-2">
-                  <span>Batas Waktu Bayar:</span>
-                  <span className="font-mono font-bold text-amber-400 flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    {formatTimer(countdownSec)}
-                  </span>
-                </div>
-
-                {/* Simulated QR Code */}
-                <div className="mx-auto w-48 h-48 rounded-2xl bg-white p-3 flex flex-col items-center justify-center shadow-lg">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=00020101021126580014ID.LINKAJA.WWW01189360000201100000000215KlipChipMVP00005303360540450005802ID5915KLIPCHIP INDO6007JAKARTA62070703A016304724B"
-                    alt="QRIS Code KlipChip"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div className="text-[11px] text-zinc-400 space-y-0.5">
-                  <p className="font-semibold text-white">Scan dengan Aplikasi Bank atau E-Wallet Apapun</p>
-                  <p>BCA, Mandiri Livin, BRImo, BNI, GoPay, OVO, DANA, ShopeePay</p>
-                </div>
+            {/* Method Details Display — pembayaran diselesaikan di halaman checkout Mayar */}
+            <div className="rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-4">
+              <div className="flex items-center justify-between text-xs text-zinc-400 border-b border-white/5 pb-2">
+                <span>Batas Waktu Bayar:</span>
+                <span className="font-mono font-bold text-amber-400 flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  {formatTimer(countdownSec)}
+                </span>
               </div>
-            )}
 
-            {['gopay', 'ovo', 'dana', 'shopeepay'].includes(selectedMethod) && (
-              <div className="rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-4">
-                <div className="flex gap-2">
-                  {(['gopay', 'ovo', 'dana', 'shopeepay'] as PaymentMethod[]).map((ew) => (
-                    <button
-                      key={ew}
-                      onClick={() => setSelectedMethod(ew)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
-                        selectedMethod === ew
-                          ? 'bg-brand-600 text-white'
-                          : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                      }`}
+              <div className="flex flex-col items-center gap-3 py-2 text-center">
+                <ShieldCheck className="h-10 w-10 text-cyan-400" />
+                <p className="text-sm font-semibold text-white">
+                  Kamu akan diarahkan ke halaman pembayaran aman Mayar
+                </p>
+                <p className="text-[11px] text-zinc-400 leading-relaxed max-w-sm">
+                  Pilih QRIS, e-wallet, atau virtual account langsung di sana. Status pembayaran
+                  masuk otomatis ke dashboard begitu Mayar mengonfirmasi.
+                </p>
+                <div className="flex flex-wrap justify-center gap-1.5 mt-1">
+                  {['QRIS', 'GoPay', 'OVO', 'DANA', 'ShopeePay', 'BCA VA', 'Mandiri VA', 'BRI VA'].map((c) => (
+                    <span
+                      key={c}
+                      className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1 text-[10px] font-bold text-zinc-300"
                     >
-                      {ew}
-                    </button>
+                      {c}
+                    </span>
                   ))}
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-300">Nomor HP Akun {selectedMethod.toUpperCase()}</label>
-                  <input
-                    type="text"
-                    defaultValue="081234567890"
-                    className="w-full rounded-xl border border-white/10 bg-zinc-900 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
-                  />
-                  <p className="text-[11px] text-zinc-500">Notifikasi konfirmasi akan dikirim ke aplikasi Anda.</p>
-                </div>
               </div>
-            )}
 
-            {selectedMethod.includes('_va') && (
-              <div className="rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-4">
-                <div className="flex gap-2">
-                  {[
-                    { id: 'bca_va', name: 'BCA' },
-                    { id: 'mandiri_va', name: 'Mandiri' },
-                    { id: 'bri_va', name: 'BRI' },
-                    { id: 'bni_va', name: 'BNI' },
-                  ].map((bank) => (
-                    <button
-                      key={bank.id}
-                      onClick={() => setSelectedMethod(bank.id as PaymentMethod)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-                        selectedMethod === bank.id
-                          ? 'bg-brand-600 text-white'
-                          : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      {bank.name}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="rounded-xl bg-zinc-900 p-3 flex items-center justify-between border border-white/5">
-                  <div>
-                    <span className="text-[10px] text-zinc-400 uppercase">Nomor Virtual Account:</span>
-                    <p className="font-mono text-base font-extrabold text-cyan-300 mt-0.5">
-                      8801 9283 7461 0023
-                    </p>
-                  </div>
+              {returningRef && (
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 space-y-2">
+                  <p className="text-xs text-cyan-200">
+                    Sudah menyelesaikan pembayaran di Mayar? Klik tombol di bawah untuk
+                    mengambil status terbaru.
+                  </p>
                   <button
-                    onClick={() => handleCopy('8801928374610023')}
-                    className="flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20 transition-all"
+                    onClick={checkReturnedPayment}
+                    disabled={isCheckingReturn}
+                    className="w-full py-2 rounded-xl bg-cyan-500 text-white text-xs font-bold transition-all disabled:opacity-50"
                   >
-                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                    <span>{copied ? 'Tersalin' : 'Salin'}</span>
+                    {isCheckingReturn ? 'Memeriksa...' : 'Saya Sudah Bayar — Cek Status'}
                   </button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 

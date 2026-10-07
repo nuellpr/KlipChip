@@ -11,7 +11,7 @@ Aplikasi web untuk mengubah video YouTube/Twitch menjadi klip pendek vertikal de
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS
 - **Database**: SQLite via Prisma 6 (siap migrasi ke PostgreSQL)
 - **Auth**: Session cookie httpOnly HMAC-SHA256 (magic-link / Google placeholder)
-- **Payments**: API pay-per-clip dengan webhook HMAC-SHA256 terverifikasi (QRIS / E-Wallet / VA)
+- **Payments**: Mayar (Request Payment v2) — checkout di halaman Mayar, status masuk via webhook yang diverifikasi ulang ke API Mayar (HMAC webhook internal sudah dihapus, Mayar tidak menandatangani webhook)
 - **Video**: Python worker (`scripts/clip_worker.py`) + `yt-dlp` + FFmpeg 7.1 (crop 9:16 + burn caption ASS karaoke)
 
 ## Prasyarat
@@ -96,9 +96,9 @@ Dashboard (`/dashboard`) menampilkan riwayat klip, status render, invoice, retry
 | `/api/clips/[id]/download` | GET | Unduh file (hanya pemilik & completed) |
 | `/api/render-clip` | POST | Antrekan job render (diproses proses `npm run worker`) |
 | `/api/payments/packages` | POST | Ambil paket kredit |
-| `/api/payments/create` | POST | Buat transaksi pending |
-| `/api/payments/webhook` | POST | Webhook gateway (verifikasi HMAC) |
-| `/api/payments/simulate` | POST | Simulasi gateway (dev only, 404 di production) |
+| `/api/payments/create` | POST | Buat payment request di Mayar, kembalikan link checkout |
+| `/api/payments/webhook` | POST | Webhook Mayar (`payment.received`) — konfirmasi ulang ke API Mayar sebelum mengcredited |
+| `/api/payments/simulate` | POST | Konfirmasi lokal tanpa Mayar (dev only, 404 di production) |
 | `/api/payments/[reference]` | GET | Polling status |
 | `/api/payments/use-credit` | POST | Pakai saldo kredit |
 | `/api/admin/stats` | GET | Statistik admin |
@@ -106,8 +106,9 @@ Dashboard (`/dashboard`) menampilkan riwayat klip, status render, invoice, retry
 ## Keamanan
 
 - Session cookie httpOnly + HMAC, masa berlaku 30 hari
-- Webhook pembayaran verifikasi `x-klipchip-signature` (HMAC-SHA256 raw body)
+- Webhook Mayar **tidak ditandatangani** (docs resmi tidak menyebut header signature), jadi `/api/payments/webhook` memperlakukan body sebagai petunjuk kandidat saja dan selalu mengonfirmasi status lewat `GET /hl/v2/payments/{id}` dengan API token sebelum kredit diberikan. Route tidak lagi mempercayai payload webhook apa adanya.
 - Rate limit: 30 clip/jam, 20 payment/jam, 10 render/jam per user
+- Polling status pembayaran hanya menyentuh database; panggilan ke API Mayar dijaga 4×/menit/user karena kuota gateway 50 request/menit per API key.
 - Download terproteksi: cek pemilik + status `completed` + file ada
 - Validasi durasi klip 5–180 detik, sanitasi URL untuk cegah SSRF
 
@@ -135,7 +136,6 @@ src/components/auth-gate.tsx
 - `cookies.txt` (untuk video privat/age-restricted) diletakkan di root dan otomatis di-ignore git.
 - Untuk PostgreSQL produksi, ganti `DATABASE_URL` ke `postgresql://...` dan `npx prisma db push`.
 - Deteksi **audio spike** memakai RMS envelope asli dari audio yang diunduh. Deteksi **chat velocity** masih *estimasi* dari kepadatan kata transcript (`buildChatVelocity` di `src/lib/transcript-analysis.ts`), bukan data chat asli.
-- Payment gateway belum terhubung ke penyedia sungguhan — `create` masih merakit string QRIS/VA sendiri dan webhook hanya dipicu `/api/payments/simulate` (nonaktif di production). Jangan industrialization sebelum integrasi gateway selesai.
 
 ## Catatan Produksi (Single VPS)
 

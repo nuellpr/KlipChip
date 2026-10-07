@@ -1,8 +1,5 @@
-import crypto from 'crypto';
 import { prisma } from './prisma';
 import { CLIP_PRICE_IDR, CREDIT_PACKAGES, getCreditPackage } from './pricing';
-
-const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'klipchip-webhook-dev-secret';
 
 export { CLIP_PRICE_IDR, CREDIT_PACKAGES, getCreditPackage };
 
@@ -10,19 +7,6 @@ export interface PaymentWebhookPayload {
   reference: string;
   status: 'paid' | 'failed';
   paidAt?: string;
-}
-
-export function signWebhookPayload(rawBody: string): string {
-  return crypto.createHmac('sha256', WEBHOOK_SECRET).update(rawBody).digest('hex');
-}
-
-export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {
-  if (!signature) return false;
-  const expected = signWebhookPayload(rawBody);
-  const sigBuf = Buffer.from(signature, 'utf8');
-  const expBuf = Buffer.from(expected, 'utf8');
-  if (sigBuf.length !== expBuf.length) return false;
-  return crypto.timingSafeEqual(sigBuf, expBuf);
 }
 
 /**

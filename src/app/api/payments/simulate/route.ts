@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { signWebhookPayload, verifyWebhookSignature, processPaymentWebhook } from '@/lib/payments';
+import { processPaymentWebhook } from '@/lib/payments';
 
 // POST /api/payments/simulate — simulasi gateway pembayaran (HANYA development).
 // Menjalankan jalur webhook lengkap: payload ditandatangani lalu diverifikasi,
@@ -24,20 +24,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Reference wajib diisi' }, { status: 400 });
     }
 
-    const payload = {
+    const result = await processPaymentWebhook({
       reference,
       status: status as 'paid' | 'failed',
       paidAt: new Date().toISOString(),
-    };
-    const rawBody = JSON.stringify(payload);
-
-    // Latih jalur verifikasi signature penuh seperti webhook asli
-    const signature = signWebhookPayload(rawBody);
-    if (!verifyWebhookSignature(rawBody, signature)) {
-      return NextResponse.json({ error: 'Signature internal gagal' }, { status: 500 });
-    }
-
-    const result = await processPaymentWebhook(payload);
+    });
 
     if (!result.ok) {
       return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 });
