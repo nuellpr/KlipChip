@@ -26,8 +26,15 @@ jobs:
       # (type stripping bawaan Node), tidak lewat ts-node.
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: npm
+
+      # Test Python (test_*.py) menguji translate_lines bilingual dan build_ass_file.
+      # Ubuntu-latest sudah punya python3, tapi dipin supaya perubahan versi
+      # interpreter tidak diam-diam mengubah perilaku test.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - run: npm ci
 

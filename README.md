@@ -17,8 +17,8 @@ Aplikasi web untuk mengubah video YouTube/Twitch menjadi klip pendek vertikal de
 
 ## Prasyarat
 
-- Node.js 20+ dan npm
-- Python 3.10+ (untuk worker)
+- **Node.js dari `.nvmrc`** (versi 24) dan npm. Bukan Node 20: test suite meng-import file `.ts` langsung, yang butuh Node >= 23.6. `npm test` menolak jalan di versi lebih tua dengan pesan jelas.
+- **Python 3.10+** (untuk worker *dan* test `test_*.py`). Wajib ada di PATH kalau mau menjalankan test Python; kalau tidak ada, runner melewatinya dan mencetat alasannya.
 - FFmpeg: letakkan `ffmpeg.exe` di `bin/` (unduh dari [ffmpeg.org](https://ffmpeg.org/download.html)) atau pastikan `ffmpeg` ada di PATH. File biner tidak di-commit karena ukurannya besar.
 - `yt-dlp` ter-install di Python: `pip install yt-dlp`
 
@@ -60,16 +60,19 @@ npm test          # suite QA scripts/test/
 
 ## Test
 
-`scripts/test/*.mjs` adalah skrip mandiri berbasis `node:assert` — bukan test framework.
-`npm test` menjalankan semuanya lewat `scripts/test/run.mjs` dan keluar non-zero kalau ada yang gagal.
+`scripts/test/*.mjs` menggunakan `node:assert`; `scripts/test/test_*.py` menggunakan
+`assert` Python polos — keduanya tanpa test framework. `npm test` menjalankan semuanya
+lewat `scripts/test/run.mjs` dan keluar non-zero kalau ada yang gagal.
 
 ```powershell
-npm test           # 10 test, butuh DATABASE_URL saja
+npm test           # 13 test, butuh DATABASE_URL saja (+ python kalau ada)
 npm run test:e2e   # + 3 test yang butuh dev server (localhost:3100) dan/atau python+ffmpeg
 ```
 
 Test yang butuh `.env` membaca `DATABASE_URL` langsung dari file itu, jadi tidak perlu set manual.
 Beberapa test menulis fixture ke database lalu membersihkannya sendiri.
+Test Python menguji `translate_lines` (batch/retry/degrade) dan `build_ass_file`
+(bilingual `.ass`) — jalur yang tidak disentuh test `.mjs` mana pun.
 
 ## Alur Penggunaan (5 Langkah Studio)
 
