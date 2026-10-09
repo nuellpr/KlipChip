@@ -16,29 +16,50 @@ import { headers } from 'next/headers';
 import { prisma } from './prisma.ts';
 
 /**
- * Base URL aplikasi.
+ * Base URL dan host yang dipercaya.
  *
- * Kalau di-set, dipakai untuk membangun redirect URL Google dan divalidasi
- * terhadap header Origin tiap request POST (proteksi CSRF Better Auth).
+ * Host tunnel dev (ngrok) berubah setiap kali tunnel dinyalakan ulang, jadi
+ * tidak bisa ditulis satu-satu. Better Auth menerima wildcard pada
+ * `allowedHosts`, dan setiap host yang terdaftar di sana otomatis ikut
+ * dipercaya sebagai origin -- tanpa itu, sign-in/sign-out dari browser yang
+ * membuka host tunnel akan ditolak 403 oleh pemeriksaan Origin.
  *
- * Kalau TIDAK di-set, Better Auth menurunkannya dari request yang masuk. Untuk
- * dev server di belakang tunnel (ngrok), menurunkannya dari request justru lebih
- * benar daripada nama localhost, karena browser mengakses lewat host tunnel.
- *
- * Catatan penting: asal host harus konsisten. Kalau BETTER_AUTH_URL berisi
- * localhost tetapi browser membuka lewat host ngrok, request POST seperti
- * sign-in/sign-out akan ditolak 403.
+ * Pola tunnel hanya aktif DI LUAR PRODUKSI. Di produksi, mempercayai seluruh
+ * domain ngrok berarti siapa pun dengan satu host ngrok bisa dianggap origin
+ * yang sah, jadi daftarnya harus eksplisit lewat BETTER_AUTH_ALLOWED_HOSTS.
  */
-const baseURL =
+const isProduction = process.env.NODE_ENV === 'production';
+
+const DEV_ONLY_HOSTS = [
+  'localhost:3000',
+  'localhost:3100',
+  '127.0.0.1:3000',
+  '127.0.0.1:3100',
+  // Tunnel dev: host acak per sesi.
+  '*.ngrok-free.app',
+  '*.ngrok-free.dev',
+  '*.ngrok.io',
+  '*.ngrok.app',
+];
+
+const allowedHosts = [
+  ...(isProduction ? [] : DEV_ONLY_HOSTS),
+  ...(process.env.BETTER_AUTH_ALLOWED_HOSTS?.split(',') ?? []),
+].map((v) => v.trim()).filter(Boolean);
+
+const explicitBaseURL =
   process.env.BETTER_AUTH_URL?.trim() ||
   process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-  'http://localhost:3000';
+  '';
 
-const trustedOrigins = [
-  ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',') ?? []),
-  'http://localhost:3000',
-  'http://localhost:3100',
-].map((v) => v.trim()).filter(Boolean);
+// Kalau base URL eksplisit ada, pakai itu. Kalau tidak, biarkan Better Auth
+// menurunkannya dari request yang masuk tetapi batasi ke allowedHosts.
+const baseURL = explicitBaseURL || { allowedHosts };
+
+// Asal tambahan di luar allowedHosts, dipisah koma.
+const trustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',') ?? [])
+  .map((v) => v.trim())
+  .filter(Boolean);
 
 export const auth = betterAuth({
   baseURL,

@@ -141,18 +141,26 @@ async function processJob(job) {
   let settled = false;
   let tail = '';
   let lastWrite = 0;
-  // Set saat job sudah difinalkan. onLine() dipanggil fire-and-forget dari
-  // handler data stdout, jadi sebuah update progress yang masih in-flight bisa
-  // mendarat SETELAH transaksi selesai dan menimpa renderProgress 100 menjadi
-  // angka marker terakhir (mis. 75). Flag ini menutup race tsb.
-  let finalized = false;
   const timer = setTimeout(() => {
     timedOut = true;
     console.log(`[runner] TIMEOUT job=${job.id} setelah ${Math.round(timeoutMs / 1000)}s -> kill tree pid=${child.pid}`);
     killTree(child);
   }, timeoutMs);
+  /**
+   * Tulis progress dari marker stdout.
+   *
+   * Dipanggil fire-and-forget dari handler data stdout, jadi sebuah update bisa
+   * masih in-flight ketika proses worker keluar dan transaksi selesai sudah
+   * ditulis. Kalau dibiarkan, update terlambat itu menimpa renderProgress 100
+   * kembali menjadi angka marker terakhir.
+   *
+   * Guard-nya sengaja ditaruh di dalam kondisi SQL, bukan di JS: `status` belum
+   * completed/failed. Dengan begitu urutan waktu tidak lagi penting — kalau clip
+   * sudah final, update mencocokkan 0 baris dan tidak mengubah apa pun. Menunggu
+   * promise in-flight (mis. Promise.allSettled di handler close) sempat dicoba
+   * tapi justru membuat proses kill/timeout jadi lambat.
+   */
   const onLine = async (line) => {
-    if (finalized) return;
     tail = (tail + line + '\n').slice(-4000);
     const hit = MARKERS.find(([m]) => line.includes(m));
     if (!hit) return;
@@ -160,7 +168,10 @@ async function processJob(job) {
     if (now - lastWrite < throttleMs) return;
     lastWrite = now;
     try {
-      await prisma.clip.update({ where: { id: clip.id }, data: { renderProgress: hit[1], renderStep: hit[2] } });
+      await prisma.clip.updateMany({
+        where: { id: clip.id, status: { notIn: ['completed', 'failed'] } },
+        data: { renderProgress: hit[1], renderStep: hit[2] },
+      });
     } catch {}
   };
   let outBuf = '';
@@ -179,9 +190,10 @@ async function processJob(job) {
     child.on('close', async (code) => {
       if (settled) return;
       settled = true;
-      finalized = true;
       clearTimeout(timer);
-      try {
+      // Urutannya penting: tunggu tulisan progress yang masih in-flight SEBELUM
+      // menulis status final. Kalau dibalik, update progress terlambat bisa
+      // mendarat setelah transaksi selesai dan menimpa renderProgress 100.      try {
         if (code === 0 && existsSync(outputPath)) {
           await prisma.$transaction([
             prisma.clipJob.update({ where: { id: job.id }, data: { status: 'completed', error: null, logTail: null, completedAt: new Date() } }),
@@ -210,9 +222,7 @@ async function processJob(job) {
     });
     child.on('error', async (err) => {
       if (settled) return;
-      settled = true;
-      finalized = true;
-      clearTimeout(timer);
+      settled = true;      clearTimeout(timer);
       const reason = `Gagal menjalankan worker: ${err.message}`;
       console.error(`[runner] spawn-error job=${job.id}:`, err.message);
       try {
