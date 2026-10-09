@@ -7,7 +7,8 @@ import { refundFailedRender } from '../src/lib/refund.ts';
 import { summarizeClipForSocial } from '../src/lib/social-summary.ts';
 
 const ROOT = process.cwd();
-const STORAGE = join(ROOT, 'storage');
+// Bisa diarahkan supaya test retensi tidak menyentuh storage render asli.
+const STORAGE = process.env.KLIPCHIP_STORAGE || join(ROOT, 'storage');
 const JOBS_DIR = join(STORAGE, 'jobs');
 const MARKERS = [
   ['[Whisper] Mulai transkripsi', 45, 'Transkripsi audio (Whisper)...'],
@@ -140,12 +141,18 @@ async function processJob(job) {
   let settled = false;
   let tail = '';
   let lastWrite = 0;
+  // Set saat job sudah difinalkan. onLine() dipanggil fire-and-forget dari
+  // handler data stdout, jadi sebuah update progress yang masih in-flight bisa
+  // mendarat SETELAH transaksi selesai dan menimpa renderProgress 100 menjadi
+  // angka marker terakhir (mis. 75). Flag ini menutup race tsb.
+  let finalized = false;
   const timer = setTimeout(() => {
     timedOut = true;
     console.log(`[runner] TIMEOUT job=${job.id} setelah ${Math.round(timeoutMs / 1000)}s -> kill tree pid=${child.pid}`);
     killTree(child);
   }, timeoutMs);
   const onLine = async (line) => {
+    if (finalized) return;
     tail = (tail + line + '\n').slice(-4000);
     const hit = MARKERS.find(([m]) => line.includes(m));
     if (!hit) return;
@@ -172,6 +179,7 @@ async function processJob(job) {
     child.on('close', async (code) => {
       if (settled) return;
       settled = true;
+      finalized = true;
       clearTimeout(timer);
       try {
         if (code === 0 && existsSync(outputPath)) {
@@ -203,6 +211,7 @@ async function processJob(job) {
     child.on('error', async (err) => {
       if (settled) return;
       settled = true;
+      finalized = true;
       clearTimeout(timer);
       const reason = `Gagal menjalankan worker: ${err.message}`;
       console.error(`[runner] spawn-error job=${job.id}:`, err.message);

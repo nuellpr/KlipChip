@@ -1,11 +1,19 @@
 import { strict as assert } from 'node:assert';
 import { writeFileSync, existsSync, rmSync, mkdirSync, utimesSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
-const ROOT = resolve(import.meta.dirname, '../..');
+// PENTING: cleanupStorage() menghapus file mp4 lama di storage sungguhan.
+// Tanpa override ini, menjalankan `npm test` akan membuang render berbayar
+// milik developer yang lebih tua dari RETENTION_DAYS. Karena itu, test ini
+// memakai ROOT sementara, bukan storage proyek.
+const ROOT = mkdtempSync(join(tmpdir(), 'klipchip-retention-'));
+process.env.KLIPCHIP_STORAGE = join(ROOT, 'storage');
+
 const { cleanupStorage } = await import('../../scripts/render-runner.mjs');
 
-const STORAGE = join(ROOT, 'storage');
+const STORAGE = process.env.KLIPCHIP_STORAGE;
 const JOBS = join(STORAGE, 'jobs');
 const old = Date.now() - 10 * 86400000;
 const f1 = join(JOBS, 'qa-retention-old.json');
@@ -32,4 +40,5 @@ try {
   console.log(`PASS retention: lama terhapus, segar + .txt aman (removed=${r.removed})`);
 } finally {
   for (const f of fixtures) rmSync(f, { force: true });
+  rmSync(ROOT, { recursive: true, force: true });
 }

@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { CaptionLine, TranscriptSegment } from '@/lib/types';
+import { getCurrentUser } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { generateAiHighlights, isAiConfigured } from '@/lib/highlight-ai';
 import {
   analyzeAudioWindows,
@@ -137,6 +139,21 @@ function windowsKey(startSeconds: number, endSeconds: number): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Endpoint ini memanggil yt-dlp (spawn proses) dan skor highlight AI lewat
+  // OpenRouter, sehingga biaya/kuotanya tidak gratis. Tanpa auth + rate limit,
+  // siapa pun yang tahu URL bisa membakar kuota AI tanpa punya akun.
+  // UI pemanggilnya sudah ada di balik AuthGate, jadi user normal tidak terpengaruh.
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Belum masuk' }, { status: 401 });
+  }
+  if (!checkRateLimit(`extract:${user.id}`, 30, 60 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: 'Terlalu banyak permintaan analisis. Coba lagi nanti.' },
+      { status: 429 }
+    );
+  }
+
   try {
     const { url } = await req.json();
 
