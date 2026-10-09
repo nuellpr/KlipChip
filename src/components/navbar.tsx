@@ -23,12 +23,26 @@ import { useAuth } from '@/lib/use-auth';
 export function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, isLoading, login, logout } = useAuth();
+  const { user, isLoading, login, register, loginWithGoogle, logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'in' | 'up'>('in');
   const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+
+  const handleGoogle = async () => {
+    setAuthError('');
+    setIsSubmittingAuth(true);
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Login Google gagal.');
+    } finally {
+      setIsSubmittingAuth(false);
+    }
+  };
 
   const navLinks = [
     { name: 'Beranda', href: '/', icon: Zap },
@@ -38,16 +52,25 @@ export function Navbar() {
     { name: 'Harga', href: '/pricing', icon: CreditCard },
   ];
 
-  const handleLogin = async (e: React.FormEvent, provider: 'google' | 'magic_link') => {
+  const handleLogin = async (e: React.FormEvent, nextMode: 'in' | 'up') => {
     e.preventDefault();
     if (!emailInput || isSubmittingAuth) return;
     setAuthError('');
+    if (passwordInput.length < 8) {
+      setAuthError('Password minimal 8 karakter.');
+      return;
+    }
     setIsSubmittingAuth(true);
     try {
-      await login(emailInput, nameInput || undefined, provider);
+      if (nextMode === 'in') {
+        await login(emailInput, passwordInput);
+      } else {
+        await register(emailInput, passwordInput, nameInput.trim() || emailInput.split('@')[0]);
+      }
       setShowAuthModal(false);
       setEmailInput('');
       setNameInput('');
+      setPasswordInput('');
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Login gagal, coba lagi.');
     } finally {
@@ -279,14 +302,16 @@ export function Navbar() {
               </p>
             </div>
 
-            <form onSubmit={(e) => handleLogin(e, 'magic_link')} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Nama kreator (opsional)"
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                className="w-full rounded-xl border border-white/15 bg-zinc-950 px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-brand-500 focus:outline-none"
-              />
+                        <form onSubmit={(e) => handleLogin(e, authMode)} className="space-y-3">
+              {authMode === 'up' && (
+                <input
+                  type="text"
+                  placeholder="Nama kreator"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-zinc-950 px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-brand-500 focus:outline-none"
+                />
+              )}
               <input
                 type="email"
                 required
@@ -295,45 +320,19 @@ export function Navbar() {
                 onChange={(e) => setEmailInput(e.target.value)}
                 className="w-full rounded-xl border border-white/15 bg-zinc-950 px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-brand-500 focus:outline-none"
               />
+              <input
+                type="password"
+                required
+                minLength={8}
+                placeholder="Password (min 8 karakter)"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-zinc-950 px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-brand-500 focus:outline-none"
+              />
 
               {authError && (
                 <p className="text-xs font-semibold text-rose-400">{authError}</p>
               )}
-
-              {/* Google Sign in â€” OAuth sungguhan */}
-              <a
-                href="/api/auth/google"
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-zinc-800/80 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition-all"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
-                <span>Lanjutkan dengan Google</span>
-              </a>
-              <p className="text-[11px] text-zinc-500 text-center">
-                Memerlukan <code className="text-zinc-300">GOOGLE_CLIENT_ID</code> di <code className="text-zinc-300">.env</code>
-              </p>
-
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <div className="h-[1px] flex-1 bg-white/10" />
-                <span>atau</span>
-                <div className="h-[1px] flex-1 bg-white/10" />
-              </div>
 
               <button
                 type="submit"
@@ -343,10 +342,62 @@ export function Navbar() {
                 {isSubmittingAuth ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <span>Masuk dengan Email</span>
+                  <span>{authMode === 'in' ? 'Masuk' : 'Daftar'}</span>
                 )}
               </button>
             </form>
+
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <div className="h-[1px] flex-1 bg-white/10" />
+              <span>atau</span>
+              <div className="h-[1px] flex-1 bg-white/10" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={isSubmittingAuth}
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-zinc-800/80 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition-all disabled:opacity-60"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-1.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+              Lanjutkan dengan Google
+            </button>
+
+            <div className="flex gap-1 rounded-xl bg-zinc-950 p-1">
+              {(['in', 'up'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => { setAuthMode(m); setAuthError(''); }}
+                  className={`flex-1 rounded-lg py-2 text-xs font-bold transition-all ${
+                    authMode === m ? 'bg-brand-600 text-white' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {m === 'in' ? 'Masuk' : 'Daftar'}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-zinc-500 text-center">
+              Session dikelola Better Auth — cookie httpOnly bertanda tangan.
+            </p>
           </div>
         </div>
       )}

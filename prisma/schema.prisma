@@ -8,16 +8,69 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  name         String
-  provider     String    @default("magic_link")
-  role         String    @default("user")
-  balanceClips Int       @default(0)
-  avatarUrl    String    @default("")
-  createdAt    DateTime  @default(now())
-  clips        Clip[]
-  payments     Payment[]
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String
+  // Ditulis Better Auth (saat login Google). App juga punya avatarUrl yang
+  // diunggah sendiri oleh user; image hanya cadangan dari provider.
+  image         String?
+  emailVerified Boolean    @default(false)
+  provider      String     @default("magic_link")
+  role          String     @default("user")
+  balanceClips  Int        @default(0)
+  avatarUrl     String     @default("")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime?  @updatedAt
+  clips         Clip[]
+  payments      Payment[]
+  sessions      Session[]
+  accounts      Account[]
+}
+
+// Model inti Better Auth. Nama tabel di-map supaya tidak bentrok dengan model
+// User/Clip/Payment lama.
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Clip {

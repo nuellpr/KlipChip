@@ -146,7 +146,7 @@ function ProfileContent() {
             </p>
             <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/10 bg-zinc-950 px-3 py-1 text-xs font-semibold text-zinc-300">
               <ShieldCheck className="h-3 w-3 text-emerald-400" />
-              {provider === 'google' ? 'Login via Google' : 'Magic Link'}
+              {provider === 'google' ? 'Login via Google' : 'Email & Password'}
             </span>
           </div>
 

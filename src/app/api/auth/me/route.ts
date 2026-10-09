@@ -2,23 +2,47 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 
+/**
+ * Provider login sebenarnya, dibaca dari tabel Account milik Better Auth.
+ * Kolom `User.provider` tetap ada untuk kompatibilitas tampilan, tapi isinya
+ * tidak diperbarui oleh Better Auth, jadi jangan dipakai sebagai sumber
+ * kebenaran. 'credential' = email+password (dulu disebut magic_link).
+ */
+async function resolveProvider(userId: string): Promise<'google' | 'password'> {
+  const account = await prisma.account.findFirst({
+    where: { userId, providerId: 'google' },
+    select: { id: true },
+  });
+  return account ? 'google' : 'password';
+}
+
+function serialize(user: {
+  id: string;
+  email: string;
+  name: string;
+  balanceClips: number;
+  role: string;
+  avatarUrl: string;
+  createdAt: Date;
+}, provider: 'google' | 'password') {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    balanceClips: user.balanceClips,
+    role: user.role,
+    avatarUrl: user.avatarUrl,
+    provider,
+    createdAt: user.createdAt.toISOString(),
+  };
+}
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: 'Belum masuk' }, { status: 401 });
   }
-  return NextResponse.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      balanceClips: user.balanceClips,
-      provider: user.provider,
-      role: (user as unknown as { role?: string }).role || 'user',
-      avatarUrl: (user as unknown as { avatarUrl?: string }).avatarUrl || '',
-      createdAt: user.createdAt.toISOString(),
-    },
-  });
+  return NextResponse.json({ user: serialize(user, await resolveProvider(user.id)) });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -59,16 +83,7 @@ export async function PATCH(req: NextRequest) {
       data,
     });
     return NextResponse.json({
-      user: {
-        id: updated.id,
-        email: updated.email,
-        name: updated.name,
-        balanceClips: updated.balanceClips,
-        provider: updated.provider,
-        role: (updated as unknown as { role?: string }).role || 'user',
-        avatarUrl: (updated as unknown as { avatarUrl?: string }).avatarUrl || '',
-        createdAt: updated.createdAt.toISOString(),
-      },
+      user: serialize(updated, await resolveProvider(user.id)),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Gagal memperbarui profil';

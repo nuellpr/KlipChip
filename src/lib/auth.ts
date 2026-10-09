@@ -1,49 +1,102 @@
-import { cookies } from 'next/headers';
-import crypto from 'crypto';
-import { prisma } from './prisma';
+/**
+ * Server auth — Better Auth.
+ *
+ * Menggantikan session token HMAC buatan sendiri (src/lib/auth.ts versi lama).
+ * Pemanggil yang tidak berubah: `getCurrentUser()` tetap diekspor dengan
+ * signature yang sama supaya ~15 route handler tidak perlu disentuh.
+ *
+ * Metode yang aktif: email+password (tidak perlu infra email) dan Google.
+ * Magic link / OTP sengaja tidak dipakai karena project ini belum punya
+ * kemampuan kirim email sama sekali -- lihat cara pakai di .env.example.
+ */
+import { betterAuth } from 'better-auth';
+import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { nextCookies } from 'better-auth/next-js';
+import { headers } from 'next/headers';
+import { prisma } from './prisma.ts';
 
-const AUTH_SECRET = process.env.AUTH_SECRET || 'klipchip-dev-secret-change-me';
+/**
+ * Base URL aplikasi.
+ *
+ * Kalau di-set, dipakai untuk membangun redirect URL Google dan divalidasi
+ * terhadap header Origin tiap request POST (proteksi CSRF Better Auth).
+ *
+ * Kalau TIDAK di-set, Better Auth menurunkannya dari request yang masuk. Untuk
+ * dev server di belakang tunnel (ngrok), menurunkannya dari request justru lebih
+ * benar daripada nama localhost, karena browser mengakses lewat host tunnel.
+ *
+ * Catatan penting: asal host harus konsisten. Kalau BETTER_AUTH_URL berisi
+ * localhost tetapi browser membuka lewat host ngrok, request POST seperti
+ * sign-in/sign-out akan ditolak 403.
+ */
+const baseURL =
+  process.env.BETTER_AUTH_URL?.trim() ||
+  process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+  'http://localhost:3000';
 
-export const SESSION_COOKIE = 'kc_session';
-export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 hari
+const trustedOrigins = [
+  ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',') ?? []),
+  'http://localhost:3000',
+  'http://localhost:3100',
+].map((v) => v.trim()).filter(Boolean);
 
-export function createSessionToken(userId: string): string {
-  const ts = Date.now().toString();
-  const payload = `${userId}.${ts}`;
-  const sig = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('hex');
-  return `${payload}.${sig}`;
-}
+export const auth = betterAuth({
+  baseURL,
+  trustedOrigins: [...new Set(trustedOrigins)],
+  database: prismaAdapter(prisma, { provider: 'sqlite' }),
 
-export function verifySessionToken(token: string): string | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  const [userId, ts, sig] = parts;
+  emailAndPassword: {
+    enabled: true,
+    // Tidak ada email verification: project belum punya pengirim email.
+    // Kalau nanti ditambah SMTP, nyalakan ini dan kirim link verifikasi.
+    requireEmailVerification: false,
+    minPasswordLength: 8,
+    maxPasswordLength: 128,
+  },
 
-  const expectedSig = crypto
-    .createHmac('sha256', AUTH_SECRET)
-    .update(`${userId}.${ts}`)
-    .digest('hex');
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    },
+  },
 
-  const sigBuf = Buffer.from(sig, 'utf8');
-  const expectedBuf = Buffer.from(expectedSig, 'utf8');
-  if (sigBuf.length !== expectedBuf.length) return null;
-  if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) return null;
+  session: {
+    // Sebelumnya session token berlaku 30 hari; disamakan supaya user tidak
+    // tiba-tiba ter-logout.
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
+    // Session dibaca di setiap route handler. Cache cookie menghindari query
+    // DB per request; DB tetap sumber kebenaran (Better Auth memvalidasi token
+    // yang ditandatangani di dalam cookie).
+    cookieCache: { enabled: true, maxAge: 60 * 5 },
+  },
 
-  const issuedAt = parseInt(ts, 10);
-  if (Number.isNaN(issuedAt)) return null;
-  if (Date.now() - issuedAt > SESSION_MAX_AGE_SECONDS * 1000) return null;
+  // Kolom tambahan milik app yang ditulis Better Auth saat user dibuat lewat
+  // Google. Tanpa ini, avatar Google tidak tersimpan.
+  user: {
+    additionalFields: {
+      role: { type: 'string', required: false, defaultValue: 'user', input: false },
+      balanceClips: { type: 'number', required: false, defaultValue: 0, input: false },
+      avatarUrl: { type: 'string', required: false, input: false },
+      provider: { type: 'string', required: false, input: false },
+    },
+  },
 
-  return userId;
-}
+  plugins: [nextCookies()],
+});
 
+/**
+ * Pengganti getCurrentUser() lama. Mengembalikan baris User beserta kolom
+ * milik app (role, balanceClips, avatarUrl), bukan objek session Better Auth,
+ * supaya route handler yang sudah ada tetap bisa memakai `user.id`,
+ * `user.email`, `user.balanceClips`.
+ */
 export async function getCurrentUser() {
   try {
-    const store = await cookies();
-    const token = store.get(SESSION_COOKIE)?.value;
-    if (!token) return null;
-    const userId = verifySessionToken(token);
-    if (!userId) return null;
-    return await prisma.user.findUnique({ where: { id: userId } });
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user) return null;
+    return session.user as Awaited<ReturnType<typeof prisma.user.findUnique>>;
   } catch {
     return null;
   }

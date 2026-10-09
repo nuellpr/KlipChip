@@ -19,7 +19,7 @@ export interface User {
   email: string;
   name: string;
   avatarUrl: string;
-  provider: 'google' | 'magic_link';
+  provider: 'google' | 'password';
   balanceClips: number;
   isSubscribed: boolean;
   createdAt: string;

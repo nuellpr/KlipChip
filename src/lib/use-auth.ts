@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { authClient } from './auth-client';
 
 export interface AuthUser {
   id: string;
@@ -11,14 +12,13 @@ export interface AuthUser {
   role: string;
 }
 
-export const AUTH_CHANGED_EVENT = 'kc-auth-changed';
-
-function notifyAuthChanged() {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
-  }
-}
-
+/**
+ * Hook auth yang bentuknya sama seperti versi HMAC buatan sendiri, supaya
+ * AuthGate, navbar, profile page, dan halaman admin tidak perlu diubah.
+ *
+ * Yang berubah adalah asalnya: session sekarang dari Better Auth (tabel
+ * Session), bukan cookie HMAC ber-stateless.
+ */
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,34 +41,43 @@ export function useAuth() {
 
   useEffect(() => {
     refresh();
-    const handler = () => refresh();
-    window.addEventListener(AUTH_CHANGED_EVENT, handler);
-    return () => window.removeEventListener(AUTH_CHANGED_EVENT, handler);
   }, [refresh]);
 
-  const login = async (email: string, name?: string, provider?: 'google' | 'magic_link') => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name, provider }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Login gagal, coba lagi.');
+  const login = async (email: string, password: string) => {
+    const result = await authClient.signIn.email({ email, password });
+    if (result.error) {
+      throw new Error(result.error.message || 'Email atau password salah.');
     }
-    setUser(data.user);
-    notifyAuthChanged();
-    return data.user as AuthUser;
+    await refresh();
+    return user;
+  };
+
+  const register = async (email: string, password: string, name: string) => {
+    const result = await authClient.signUp.email({ email, password, name });
+    if (result.error) {
+      throw new Error(result.error.message || 'Gagal mendaftar.');
+    }
+    await refresh();
+    return user;
+  };
+
+  const loginWithGoogle = async () => {
+    const result = await authClient.signIn.social({
+      provider: 'google',
+      callbackURL: '/studio',
+    });
+    if (result.error) {
+      throw new Error(result.error.message || 'Login Google gagal.');
+    }
   };
 
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await authClient.signOut();
     } finally {
       setUser(null);
-      notifyAuthChanged();
     }
   };
 
-  return { user, isLoading, login, logout, refresh };
+  return { user, isLoading, login, register, loginWithGoogle, logout, refresh };
 }

@@ -10,7 +10,7 @@ Aplikasi web untuk mengubah video YouTube/Twitch menjadi klip pendek vertikal de
 
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS
 - **Database**: SQLite via Prisma 6 (siap migrasi ke PostgreSQL)
-- **Auth**: Session cookie httpOnly HMAC-SHA256 (magic-link / Google placeholder)
+- **Auth**: Better Auth — session berbasis database (tabel `Session`), cookie httpOnly bertanda tangan. Email+password + Google OAuth.
 - **Payments**: Mayar (Request Payment v2) — checkout di halaman Mayar, status masuk via webhook yang diverifikasi ulang ke API Mayar (HMAC webhook internal sudah dihapus, Mayar tidak menandatangani webhook)
 - **Video**: Python worker (`scripts/clip_worker.py`) + `yt-dlp` + FFmpeg 7.1 (crop 9:16 + burn caption ASS karaoke)
 - **AI**: OpenRouter (endpoint OpenAI-compatible) untuk skor highlight, terjemahan bilingual, dan ringkasan sosmed. Model default `apodex/apodex-1.1-mini:free`. Tanpa API key, semua fitur ini otomatis jatuh ke heuristik lokal.
@@ -31,8 +31,10 @@ pip install yt-dlp
 
 # 2. Environment
 copy .env.example .env
-# Isi DATABASE_URL (default: file:D:/KlipChip/prisma/dev.db sudah benar untuk lokal)
-# AUTH_SECRET dan PAYMENT_WEBHOOK_SECRET bebas string random
+# Wajib diisi: DATABASE_URL, BETTER_AUTH_SECRET, BETTER_AUTH_URL.
+# BETTER_AUTH_URL harus host yang dibuka browser -- kalau dev server di-tunnel
+# (ngrok), isi dengan host ngrok, bukan localhost, kalau tidak sign-in/sign-out
+# akan 403. Generate secret: openssl rand -base64 32
 
 # 3. Database (SQLite)
 npx prisma db push
@@ -88,11 +90,8 @@ Dashboard (`/dashboard`) menampilkan riwayat klip, status render, invoice, retry
 
 | Endpoint | Method | Deskripsi |
 |---|---|---|
-| `/api/auth/login` | POST | Login / daftar dengan email |
-| `/api/auth/logout` | POST | Hapus session |
-| `/api/auth/me` | GET | User saat ini |
-| `/api/auth/google` | GET | Mulai OAuth Google |
-| `/api/auth/google/callback` | GET | Callback OAuth Google |
+| `/api/auth/[...all]` | GET/POST | Semua endpoint Better Auth (sign-up, sign-in, sign-out, get-session, callback Google) |
+| `/api/auth/me` | GET / PATCH | User saat ini; PATCH ubah nama & avatar |
 | `/api/extract-metadata` | POST | Metadata video + kandidat highlight (audio RMS asli) |
 | `/api/clips` | GET / POST | List & buat klip |
 | `/api/clips/[id]` | PATCH / DELETE | Update rating/status, hapus |
@@ -129,7 +128,7 @@ Dashboard (`/dashboard`) menampilkan riwayat klip, status render, invoice, retry
 prisma/schema.prisma   # model User, Clip, Payment
 storage/               # hasil render (gitignored)
 storage/jobs/          # job JSON sementara
-src/lib/auth.ts        # session HMAC
+src/lib/auth.ts        # Better Auth server instance + getCurrentUser()
 src/lib/payments.ts    # sign/verify webhook
 src/lib/clips.ts       # serializer Clip → ClipProject
 src/components/auth-gate.tsx
