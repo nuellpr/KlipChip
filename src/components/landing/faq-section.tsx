@@ -8,8 +8,8 @@ export function FaqSection() {
 
   const faqs = [
     {
-      q: 'Bagaimana cara kerja deteksi highlight audio spike dan chat?',
-      a: 'KlipChip memindai gelombang audio video sumber untuk mendeteksi perubahan energi loudness yang mendadak (seperti teriakan, tawa heboh, atau ledakan in-game) sekaligus mencocokkannya dengan grafik lonjakan pesan di chat livestream. Kombinasi ini memberikan skor relevansi momen viral hingga >95%.',
+      q: 'Bagaimana cara kerja deteksi highlight audio spike dan reaksi penonton?',
+      a: 'Skor audio spike memakai lapisan gelombang audio ASLI dari video sumber, sehingga perubahan energi loudness yang mendadak (teriakan, tawa heboh, ledakan in-game) terdeteksi langsung. Sementara itu, layar reaksi penonton adalah ESTIMASI dari kepadatan kata transkrip otomatis — bukan data chat livestream sungguhan. Kombinasi keduanya memberi skor relevansi momen viral.',
     },
     {
       q: 'Apakah auto-caption benar-benar mengenali istilah gaul gaming Indonesia?',

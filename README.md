@@ -146,7 +146,25 @@ src/components/auth-gate.tsx
 
 ## Catatan Produksi (Single VPS)
 
-- (a) Jalankan web dan worker di server yang sama: terminal pertama `npm run build && npm start`, terminal kedua `npm run worker` (opsional: daftarkan keduanya di pm2/systemd, contoh: `npm2 start npm --name klipchip-web -- start` dan `npm2 start npm --name klipchip-worker -- run worker`).
+Proses yang harus idup ada dua: **web** (`next start`) dan **worker** (`npm run worker`). Karena
+butuh dua proses, cara paling ringan pakai pm2:
+
+```bash
+npm ci --omit=dev          # atau npm ci lalu npm run build
+npm run build
+mkdir -p storage/logs      # tempat pm2 menulis log
+cp .env.example .env       # lalu isi MAYAR_API_KEY / OPENROUTER_API_KEY dll
+npx prisma db push         # skema database
+pm2 start ecosystem.config.cjs
+pm2 save                   # hidup lagi setelah reboot
+pm2 startup                # sekali saja, ikuti instruksi yang dicetak
+pm2 logs klipchip-worker   # pantau worker
+```
+
+`ecosystem.config.cjs` mengunci worker di **1 instance** (`exec_mode: fork`) — klaim job memakai
+SQLite, jadi scale worker hanya membuat dua proses berebut job yang sama. Kalau butuh multi-worker,
+pindah dulu ke PostgreSQL dan ubah klaim job ke `SELECT ... FOR UPDATE SKIP LOCKED`.
+
 - (b) Rate limiter masih in-memory → valid untuk satu instance; ganti ke Redis jika web dijalankan multi-instance.
 - (c) cookies.txt bersifat global & kedaluwarsa → perbarui manual saat YouTube mulai menolak render.
 - (d) Retensi storage: file hasil render lebih tua dari RETENTION_DAYS hari (default 7) dihapus otomatis oleh worker.

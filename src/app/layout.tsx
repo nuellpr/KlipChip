@@ -29,7 +29,7 @@ const chakraPetch = Chakra_Petch({
 export const metadata: Metadata = {
   title: 'KlipChip - Ubah Video YouTube & Twitch Jadi Klip Vertikal 9:16 Cepat',
   description:
-    'Aplikasi pembuat highlight video livestream otomatis dengan deteksi audio spike, lonjakan chat, dan auto-caption slang gaming Indonesia. Bayar per clip tanpa langganan mahal!',
+    'Aplikasi pembuat highlight video livestream otomatis dengan deteksi audio spike, estimasi reaksi penonton, dan auto-caption slang gaming Indonesia. Bayar per clip tanpa langganan mahal!',
   keywords: [
     'klipchip',
     'clip youtube shorts',

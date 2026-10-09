@@ -250,9 +250,10 @@ export function StepHighlightAi({
               <Volume2 className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Grafik Gelombang Suara & Aktivitas Chat</h3>
+              <h3 className="text-sm font-bold text-white">Grafik Gelombang Suara & Estimasi Reaksi Penonton</h3>
               <p className="text-xs text-zinc-400">
-                Puncak warna cyan menunjukkan audio spike (teriakan/klimaks) dan amber menunjukkan lonjakan chat.
+                Puncak cyan menunjukkan audio spike yang terukur dari audio asli; amber adalah
+                estimasi reaksi penonton dari kepadatan kata transkrip, bukan hitungan pesan chat.
               </p>
             </div>
           </div>
@@ -288,13 +289,15 @@ export function StepHighlightAi({
           </div>
         </div>
 
-        {/* Chat Velocity Bars */}
+        {/* Estimasi Reaksi Penonton */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
             <span className="text-amber-400 flex items-center gap-1">
-              <MessageSquare className="h-3.5 w-3.5" /> Kecepatan Pesan Chat (msg/s)
+              <MessageSquare className="h-3.5 w-3.5" /> Estimasi Reaksi Penonton
             </span>
-            <span className="text-amber-300 font-mono">Lonjakan Tertinggi: 160 msg/s</span>
+            <span className="text-amber-300 font-mono">
+              Puncak Tertinggi: {video.chatVelocity?.length ? Math.max(...video.chatVelocity) : 0} skor
+            </span>
           </div>
 
           <div className="relative h-10 rounded-2xl bg-zinc-950 p-1.5 flex items-end gap-1 overflow-hidden border border-white/10">

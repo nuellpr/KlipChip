@@ -10,7 +10,7 @@ export function ComparisonSection() {
       globalAi: false,
     },
     {
-      feature: 'Highlight Berbasis Lonjakan Chat YouTube & Twitch',
+      feature: 'Highlight Berbasis Audio Spike + Estimasi Reaksi Penonton',
       klipchip: true,
       manualEditing: false,
       globalAi: 'Terbatas',

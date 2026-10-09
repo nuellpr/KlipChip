@@ -21,12 +21,12 @@ export function FeatureGrid() {
     },
     {
       icon: MessageSquare,
-      badge: 'Chat Velocity',
+      badge: 'Reaksi Penonton',
       color: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
-      title: 'Analisis Kepadatan & Reaksi Chat Penonton',
+      title: 'Estimasi Kepadatan Reaksi Penonton',
       description:
-        'Momen terbaik selalu diikuti spam emote dan chat kilat dari penonton. KlipChip menganalisis lonjakan frekuensi pesan livestream YouTube dan Twitch secara real-time.',
-      highlights: ['Deteksi Spam Emote & Reaksi', 'Kombinasi Skor Audio + Chat', 'Penanda Timestamp Momen Hype'],
+        'Momen terbaik biasanya diikuti spam emote dan chat kilat dari penonton. KlipChip memperkirakan titik itu dari kepadatan kata transkrip, lalu menggabungkannya dengan skor audio spike.',
+      highlights: ['Estimasi dari Transkrip Otomatis', 'Kombinasi Skor Audio + Reaksi', 'Penanda Timestamp Momen Hype'],
     },
     {
       icon: Languages,
