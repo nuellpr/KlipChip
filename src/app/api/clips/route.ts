@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { serializeClip, DEFAULT_CAPTION_CONFIG } from '@/lib/clips';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { CLIP_PRICE_IDR } from '@/lib/pricing';
 
 const VALID_PLATFORMS = ['youtube', 'twitch', 'upload'];
 const VALID_LANGUAGES = ['auto', 'id', 'en', 'ms', 'jv', 'ko', 'ja', 'es'];
@@ -83,7 +84,9 @@ export async function POST(req: NextRequest) {
         ? body.name.trim().slice(0, 120)
         : `${videoTitle.slice(0, 60)} [Klip 9:16]`;
 
-    const priceIdr = Number.isInteger(body.priceIdr) && body.priceIdr > 0 ? body.priceIdr : 500;
+    // Harga server-authoritative: priceIdr dari klien diabaikan agar tak ada
+    // tagihan Rp 1 ke gateway. Ubah harga di src/lib/pricing.ts.
+    const priceIdr = CLIP_PRICE_IDR;
 
     const clip = await prisma.clip.create({
       data: {

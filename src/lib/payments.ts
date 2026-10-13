@@ -1,5 +1,5 @@
-import { prisma } from './prisma';
-import { CLIP_PRICE_IDR, CREDIT_PACKAGES, getCreditPackage } from './pricing';
+import { prisma } from './prisma.ts';
+import { CLIP_PRICE_IDR, CREDIT_PACKAGES, getCreditPackage } from './pricing.ts';
 
 export { CLIP_PRICE_IDR, CREDIT_PACKAGES, getCreditPackage };
 
@@ -24,20 +24,32 @@ export async function processPaymentWebhook(payload: PaymentWebhookPayload) {
   }
 
   // Idempotency: pembayaran yang sudah final tidak diproses ulang
-  if (payment.status === 'paid') {
+  if (payment.status === 'paid' || payment.status === 'failed') {
     return { ok: true as const, alreadyProcessed: true, payment };
   }
 
   const newStatus = payload.status === 'paid' ? 'paid' : 'failed';
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const p = await tx.payment.update({
-      where: { id: payment.id },
+  return prisma.$transaction(async (tx) => {
+    // Guard atomik: flip hanya berhasil kalau status masih seperti yang kita
+    // baca (optimistic concurrency). Webhook dan polling bisa masuk bersamaan;
+    // yang kalah melihat count=0 dan TIDAK menambah saldo — menutup race saldo
+    // dobel pada top-up paket.
+    const claimed = await tx.payment.updateMany({
+      where: { id: payment.id, status: payment.status },
       data: {
         status: newStatus,
         paidAt: payload.status === 'paid' ? new Date(payload.paidAt || Date.now()) : null,
       },
     });
+
+    if (claimed.count === 0) {
+      const current = await tx.payment.findUnique({
+        where: { id: payment.id },
+        include: { clip: true },
+      });
+      return { ok: true as const, alreadyProcessed: true, payment: current ?? payment };
+    }
 
     if (payload.status === 'paid') {
       if (payment.packageCode && payment.creditAmount) {
@@ -62,8 +74,10 @@ export async function processPaymentWebhook(payload: PaymentWebhookPayload) {
       }
     }
 
-    return p;
+    const updated = await tx.payment.findUnique({
+      where: { id: payment.id },
+      include: { clip: true },
+    });
+    return { ok: true as const, alreadyProcessed: false, payment: updated ?? payment };
   });
-
-  return { ok: true as const, alreadyProcessed: false, payment: updated };
 }

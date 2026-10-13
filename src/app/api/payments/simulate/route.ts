@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { processPaymentWebhook } from '@/lib/payments';
 
@@ -22,6 +23,15 @@ export async function POST(req: NextRequest) {
 
     if (!reference) {
       return NextResponse.json({ error: 'Reference wajib diisi' }, { status: 400 });
+    }
+
+    // Hanya pemilik transaksi yang boleh mengonfirmasinya — reference milik
+    // user lain tidak boleh dibayarkan lewat endpoint ini.
+    const payment = await prisma.payment.findUnique({
+      where: { providerReference: reference },
+    });
+    if (!payment || payment.userId !== user.id) {
+      return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 });
     }
 
     const result = await processPaymentWebhook({

@@ -48,6 +48,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Klip yang sudah gagal tak boleh diantre ulang gratis: refund mengembalikan
+    // 1 kredit tiap kegagalan, jadi retry tanpa bayar lagi menjadi sumber kredit
+    // gratis. Buat klip baru untuk mencoba lagi.
+    if (clip.status === 'failed') {
+      return NextResponse.json(
+        { error: 'Klip ini sudah pernah gagal dirender (kredit sudah dikembalikan). Buat klip baru untuk mencoba lagi.' },
+        { status: 409 }
+      );
+    }
+
     // Wajib sudah dibayar (webhook pembayaran mengubah status menjadi paid)
     if (clip.payment?.status !== 'paid') {
       return NextResponse.json(
