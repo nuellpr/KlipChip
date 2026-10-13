@@ -101,6 +101,12 @@ function StudioContent() {
     if (!selectedVideo) return;
     const presetInfo = DURATION_PRESETS.find((p) => p.id === durationPreset) || DURATION_PRESETS[3];
     const created: BatchClipItem[] = [];
+    let batchError = '';
+    const commit = () => {
+      setBatchClips(created);
+      setPaymentRef(`KC-BATCH-${created.length}-${Date.now().toString().slice(-6)}`);
+      setCurrentStep(5);
+    };
     setIsSavingClip(true);
     setSaveError('');
     try {
@@ -149,7 +155,10 @@ function StudioContent() {
           }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Gagal membuat klip');
+        if (!res.ok) {
+          batchError = data.error || 'Gagal membuat klip';
+          break;
+        }
         const cid = data.clip.id;
 
         const creditRes = await fetch('/api/payments/use-credit', {
@@ -158,26 +167,34 @@ function StudioContent() {
           body: JSON.stringify({ clipId: cid }),
         });
         if (!creditRes.ok) {
+          // Klip dibuat tapi belum dibayar (gratis) → aman berhenti; klip berbayar sebelumnya tetap lewat commit().
           const cd = await creditRes.json().catch(() => ({}));
-          throw new Error(cd.error || 'Kredit tidak cukup untuk semua klip batch');
+          batchError = cd.error || 'Kredit tidak cukup untuk semua klip batch';
+          break;
         }
 
-        await fetch('/api/render-clip', {
+        // Sudah dibayar: daftarkan lebih dulu agar tidak yatim walau render gagal.
+        created.push({ clipId: cid, name: h.title, startSeconds: finalStart, endSeconds: finalEnd });
+
+        const renderRes = await fetch('/api/render-clip', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clipId: cid }),
         });
-
-        created.push({ clipId: cid, name: h.title, startSeconds: finalStart, endSeconds: finalEnd });
+        if (!renderRes.ok) {
+          const rd = await renderRes.json().catch(() => ({}));
+          batchError = rd.error || 'Sebagian klip dibuat tetapi render gagal dijadwalkan — cek Dashboard';
+          break;
+        }
       }
-      setBatchClips(created);
-      setPaymentRef(`KC-BATCH-${created.length}-${Date.now().toString().slice(-6)}`);
-      setCurrentStep(5);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Gagal memproses batch klip');
+      // Error tak terduga (mis. jaringan): klip yang sudah dibayar tetap ditampilkan.
+      batchError = err instanceof Error ? err.message : 'Gagal memproses batch klip';
     } finally {
       setIsSavingClip(false);
     }
+    if (created.length > 0) commit();
+    if (batchError) setSaveError(batchError);
   };
 
   // Step 3 -> Step 4 (simpan klip ke database terlebih dahulu)
