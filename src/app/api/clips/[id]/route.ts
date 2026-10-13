@@ -82,9 +82,19 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const clip = await prisma.clip.findUnique({ where: { id } });
+  const clip = await prisma.clip.findUnique({ where: { id }, include: { payment: true } });
   if (!clip || clip.userId !== user.id) {
     return NextResponse.json({ error: 'Klip tidak ditemukan' }, { status: 404 });
+  }
+
+  // Pembayaran berbayar adalah catatan finansial (admin stats menghitung
+  // revenue dari tabel Payment). Lepas dari klip dulu — clipId nullable, sama
+  // seperti pembayaran paket — supaya tak terhapus cascade bersama klip.
+  if (clip.payment?.status === 'paid') {
+    await prisma.payment.update({
+      where: { id: clip.payment.id },
+      data: { clipId: null },
+    });
   }
 
   await prisma.clip.delete({ where: { id } });
