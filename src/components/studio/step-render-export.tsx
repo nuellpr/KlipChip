@@ -138,20 +138,21 @@ export function StepRenderExport({
             return;
           }
 
-          // Render backend gagal — tampilkan alasan & fallback ke canvas client
-          if (apiData.error || apiData.refunded) {
-            // Refund otomatis dilakukan server; beri tahu pengguna
-            if (isMounted) {
-              setRenderProgress(15);
-              setCurrentStepText('Render backend gagal, beralih ke render lokal di browser...');
-              setIsRenderFailed(true);
-              setRenderError(
-                apiData.refunded
-                  ? `Render gagal (saldo klip dikembalikan otomatis): ${apiData.error}`
-                  : apiData.error || 'Render backend gagal.'
-              );
-            }
+          // Render backend gagal (ditolak/kuota/error) — tampilkan alasan & BERHENTI.
+          // Jangan fallback ke canvas: klip ini berbayar & dirender server-side;
+          // menandai 'completed' tanpa output asli = state bohong. Saldo sudah
+          // dikembalikan server; user bisa Retry dari Dashboard.
+          if (isMounted) {
+            setRenderProgress(15);
+            setCurrentStepText('Render backend gagal.');
+            setIsRenderFailed(true);
+            setRenderError(
+              apiData.refunded
+                ? `Render gagal (saldo klip dikembalikan otomatis): ${apiData.error}`
+                : apiData.error || 'Render backend gagal. Anda bisa mencoba lagi dari Dashboard.'
+            );
           }
+          return;
         }
 
         // Client-side Canvas fallback
@@ -202,12 +203,17 @@ export function StepRenderExport({
         }
       } catch (err) {
         console.error('Export error:', err);
+        // Jangan pura-pura sukses: menawarkan thumbnail sebagai MP4 = unduhan salah.
+        // Tampilkan kegagalan; user bisa coba ulang atau buat klip baru.
         if (isMounted) {
-          setRenderProgress(100);
-          setCurrentStepText('Render Selesai! Video Siap Diunduh.');
-          setIsRenderComplete(true);
-          setIsRenderFailed(false);
-          setDownloadBlobUrl(video.thumbnailUrl);
+          setRenderProgress(15);
+          setCurrentStepText('Render gagal.');
+          setIsRenderFailed(true);
+          setRenderError(
+            err instanceof Error && err.message
+              ? `Render gagal: ${err.message}`
+              : 'Render gagal. Silakan coba lagi.'
+          );
         }
       }
     }
