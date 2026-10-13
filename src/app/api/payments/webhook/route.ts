@@ -2,11 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { processPaymentWebhook } from '@/lib/payments';
 import { fetchPaymentRequest, MayarError } from '@/lib/mayar';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // Batas pencarian kandidat. Mayar tidak menandatangani webhook (docs tidak
 // menyebut header signature sama sekali), jadi isi body diperlakukan sebagai
 // petunjuk saja -- kebenaran selalu dicek ulang ke API Mayar.
 const MAX_CANDIDATES = 5;
+
+// Webhook tak ber-signature (lihat catatan keamanan di bawah), jadi batasi
+// per-IP agar tak jadi alat enumerasi/flood yang membakar kuota API Mayar.
+// shortcut: limiter in-memory per-IP (belum Redis/global); polling
+// /api/payments/[reference] jadi jaring pengaman bila webhook sah kena 429.
+const WEBHOOK_RATE_LIMIT = 60;
+const WEBHOOK_WINDOW_MS = 60 * 1000;
+
+function getClientIp(req: NextRequest): string {
+  const fwd = req.headers.get('x-forwarded-for');
+  if (fwd) return fwd.split(',')[0].trim();
+  return req.headers.get('x-real-ip') || 'unknown';
+}
 
 /**
  * Terjemahkan payload webhook Mayar menjadi daftar kandidat pembayaran lokal.
@@ -31,6 +45,10 @@ function extractCandidates(payload: unknown): { email: string | null; amountIdr:
 // route ini hanya memakai body sebagai PETUNJUK kandidat, lalu mengonfirmasi ke
 // API Mayar (server-to-server, pakai API token) sebelum mengubah status.
 export async function POST(req: NextRequest) {
+  if (!checkRateLimit(`webhook:${getClientIp(req)}`, WEBHOOK_RATE_LIMIT, WEBHOOK_WINDOW_MS)) {
+    return NextResponse.json({ received: true, matched: false, reason: 'rate_limited' }, { status: 429 });
+  }
+
   let payload: unknown;
   try {
     payload = await req.json();
@@ -95,5 +113,8 @@ export async function POST(req: NextRequest) {
   }
 
   const matched = results.some((r) => r.confirmed);
-  return NextResponse.json({ received: true, matched, results });
+  // Jangan kembalikan daftar referensi/status di respons — itu membocorkan
+  // data pembayaran user lain (enumeration lewat cocok-amount-only). Cukup
+  // indikator booleannya.
+  return NextResponse.json({ received: true, matched });
 }
