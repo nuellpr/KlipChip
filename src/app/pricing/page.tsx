@@ -43,6 +43,18 @@ export default function PricingPage() {
         throw new Error(createData.error || 'Gagal membuat transaksi paket');
       }
 
+      // Mayar terkonfigurasi → bayar di halaman checkout Mayar; kredit masuk
+      // lewat webhook setelah pembayaran. Simulasi lokal hanya untuk dev/demo
+      // (di production /api/payments/simulate balas 404).
+      const payLink = typeof createData.payLink === 'string' ? createData.payLink : '';
+      if (payLink) {
+        sessionStorage.setItem('klipchip:pendingPackage', createData.payment.reference);
+        setBuyStatus('');
+        setBuyingCode(null);
+        window.location.href = payLink;
+        return;
+      }
+
       setBuyStatus('Mengonfirmasi pembayaran simulasi gateway...');
       const simRes = await fetch('/api/payments/simulate', {
         method: 'POST',
