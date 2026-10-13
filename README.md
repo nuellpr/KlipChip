@@ -81,7 +81,7 @@ Test Python menguji `translate_lines` (batch/retry/degrade) dan `build_ass_file`
 1. **Sumber Video** — tempel URL YouTube/Twitch atau upload file lokal
 2. **Highlight AI** — pilih rekomendasi audio-spike & chat-velocity (atau input manual 5–180 detik)
 3. **Editor 9:16** — preview vertikal, koreksi teks caption, pilih gaya (hormozi/neon/clean/punchy), posisi & warna
-4. **Checkout** — pilih QRIS / E-Wallet / VA, bayar Rp 5.000 (webhook terverifikasi HMAC, simulate gateway di dev)
+4. **Checkout** — pilih QRIS / E-Wallet / VA, bayar Rp 5.000 (status webhook diverifikasi ulang ke API Mayar, simulate gateway di dev)
 5. **Render & Unduh** — FFmpeg memotong, crop 9:16 (1080×1920), burn caption ASS karaoke, unduh via endpoint terproteksi; rating caption setelah unduh
 
 Dashboard (`/dashboard`) menampilkan riwayat klip, status render, invoice, retry, dan hapus — semua persisten di database per akun.
@@ -129,7 +129,7 @@ prisma/schema.prisma   # model User, Clip, Payment
 storage/               # hasil render (gitignored)
 storage/jobs/          # job JSON sementara
 src/lib/auth.ts        # Better Auth server instance + getCurrentUser()
-src/lib/payments.ts    # sign/verify webhook
+src/lib/payments.ts    # verifikasi webhook ke API Mayar (Mayar tak menandatangani webhook)
 src/lib/clips.ts       # serializer Clip → ClipProject
 src/components/auth-gate.tsx
 ```
