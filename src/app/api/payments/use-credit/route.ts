@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { CLIP_PRICE_IDR } from '@/lib/payments';
+import { isWriteConflict } from '@/lib/db-errors';
 
 // POST /api/payments/use-credit — bayar klip dengan 1 kredit saldo (tanpa gateway)
 export async function POST(req: NextRequest) {
@@ -60,6 +61,9 @@ export async function POST(req: NextRequest) {
       if (!current) {
         return { ok: false as const, reason: 'no_credit' };
       }
+      // Saldo asli dari DB (bukan cookie-cache 5 menit) supaya angka yang
+      // ditampilkan ke user tidak basi.
+      let balanceAfter = current.balanceClips;
       if (current.role !== 'admin') {
         if (current.balanceClips <= 0) {
           return { ok: false as const, reason: 'no_credit' };
@@ -68,6 +72,7 @@ export async function POST(req: NextRequest) {
           where: { id: user.id },
           data: { balanceClips: { decrement: 1 } },
         });
+        balanceAfter = current.balanceClips - 1;
       }
       const payment = await tx.payment.create({
         data: {
@@ -84,7 +89,7 @@ export async function POST(req: NextRequest) {
         where: { id: clip.id },
         data: { status: 'paid', renderStep: 'Pembayaran dengan kredit diterima, menunggu render final.' },
       });
-      return { ok: true as const, payment };
+      return { ok: true as const, payment, balanceAfter };
     });
 
     if (!result.ok) {
@@ -98,9 +103,16 @@ export async function POST(req: NextRequest) {
         method: result.payment.method,
         amountIdr: result.payment.amountIdr,
       },
-      balanceClips: isAdmin ? user.balanceClips : user.balanceClips - 1,
+      balanceClips: result.balanceAfter,
     });
   } catch (err) {
+    // Kontensi tulis SQLite (webhook/polling bersamaan) -> 409 retryable, bukan 500 mentah.
+    if (isWriteConflict(err)) {
+      return NextResponse.json(
+        { error: 'Transaksi sedang diproses bersamaan. Coba lagi.' },
+        { status: 409 }
+      );
+    }
     const message = err instanceof Error ? err.message : 'Gagal memakai kredit';
     return NextResponse.json({ error: message }, { status: 500 });
   }

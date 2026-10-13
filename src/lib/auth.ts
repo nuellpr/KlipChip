@@ -114,11 +114,10 @@ export const auth = betterAuth({
  * `user.email`, `user.balanceClips`.
  */
 export async function getCurrentUser() {
-  try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session?.user) return null;
-    return session.user as Awaited<ReturnType<typeof prisma.user.findUnique>>;
-  } catch {
-    return null;
-  }
+  // Sengaja TIDAK menelan error: kalau getSession melempar (mis. DB/Prisma down),
+  // error dibiarkan naik -> route jadi 500. Dulu semua error jadi null -> route
+  // salah melaporkan "belum masuk" (401) padahal layanan lagi bermasalah.
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return null;
+  return session.user as Awaited<ReturnType<typeof prisma.user.findUnique>>;
 }
