@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -162,6 +162,42 @@ process.exit(0);
   const cjE = await prisma.clipJob.findUnique({ where: { id: job.id } });
   assert.equal(cjE.status, 'completed', 'E clipjob completed');
   console.log('PASS E: bilingualSubtitles=true & secondaryLanguage=ja diteruskan ke worker, render sukses');
+
+  console.log('== Skenario F: owner TIDAK menimpa job yang sudah disweep (no deliver-after-refund) ==');
+  await cleanup(); user = clip = job = undefined;
+  const gated = join(tmp, 'fake-gated.mjs');
+  const readyF = join(tmp, `F-ready-${stamp}.flag`);
+  const relF = join(tmp, `F-release-${stamp}.flag`);
+  rmSync(readyF, { force: true }); rmSync(relF, { force: true });
+  mkdirSync(tmp, { recursive: true });
+  writeFileSync(gated, `
+import { existsSync, writeFileSync } from 'node:fs';
+console.log('[Whisper] Mulai transkripsi');
+writeFileSync(${JSON.stringify(readyF)}, '1');
+for (let i = 0; i < 3000 && !existsSync(${JSON.stringify(relF)}); i++) await new Promise(r => setTimeout(r, 10));
+writeFileSync(process.argv[5], 'MP4DUMMY');
+process.exit(0);
+`);
+  process.env.KLIPCHIP_WORKER_PATH = gated;
+  await seed('paid');
+  const beforeF = (await prisma.user.findUnique({ where: { id: user.id } })).balanceClips;
+  const owned = runOnce(); // claim pending -> processing, spawn worker tergerbang
+  for (let i = 0; i < 500 && !existsSync(readyF); i++) await sleep(10);
+  await sleep(150); // pastikan job sudah ter-claim 'processing' + startedAt terisi
+  // Rekam skenario eksploitasi: job milik owner yg SEDANG render disapu stale.
+  await prisma.clipJob.update({ where: { id: job.id }, data: { startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) } });
+  const sweepF = await runOneSweepTick();
+  assert.ok(sweepF.swept >= 1, `F sweep mengambil job milik owner yg sedang render (swept=${sweepF.swept})`);
+  writeFileSync(relF, '1'); // lepas worker -> keluar 0 & output ADA -> owner coba selesaikan
+  const resF = await owned;
+  const cjF = await prisma.clipJob.findUnique({ where: { id: job.id } });
+  const clipF = await prisma.clip.findUnique({ where: { id: clip.id } });
+  const balF = (await prisma.user.findUnique({ where: { id: user.id } })).balanceClips;
+  assert.equal(resF.outcome, 'skipped', 'F owner finalize dilewati (job sudah disweep)');
+  assert.equal(cjF.status, 'failed', 'F job tetap failed (sweep menang)');
+  assert.equal(clipF.status, 'failed', 'F clip TIDAK di-complete — tak ada deliver-after-refund');
+  assert.equal(balF, beforeF + 1, `F refund tepat sekali, tidak dobel (${beforeF}->${balF})`);
+  console.log('PASS F: owner tak menimpa job tersweep — refund + render ganda tertutup');
 
   console.log('ALL PASS');
 } finally {

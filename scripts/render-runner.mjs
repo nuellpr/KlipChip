@@ -195,13 +195,27 @@ async function processJob(job) {
       // menulis status final. Kalau dibalik, update progress terlambat bisa
       // mendarat setelah transaksi selesai dan menimpa renderProgress 100.      try {
         if (code === 0 && existsSync(outputPath)) {
-          await prisma.$transaction([
-            prisma.clipJob.update({ where: { id: job.id }, data: { status: 'completed', error: null, logTail: null, completedAt: new Date() } }),
-            prisma.clip.update({
+          // Guard kepemilikan: hanya tulis 'completed' kalau job masih milik
+          // runner ini (status 'processing'). Kalau sweeper sudah menyapanya ke
+          // 'failed', JANGAN timpa — mencegah kredit direfund lalu render tetap
+          // terkirim (mismatch RENDER_TIMEOUT / runner ganda / orphan).
+          const owned = await prisma.$transaction(async (tx) => {
+            const flip = await tx.clipJob.updateMany({
+              where: { id: job.id, status: 'processing' },
+              data: { status: 'completed', error: null, logTail: null, completedAt: new Date() },
+            });
+            if (flip.count !== 1) return false;
+            await tx.clip.update({
               where: { id: clip.id },
               data: { status: 'completed', renderProgress: 100, renderStep: 'Selesai', outputFilename: basename(outputPath), completedAt: new Date() },
-            }),
-          ]);
+            });
+            return true;
+          });
+          if (!owned) {
+            console.log(`[runner] job=${job.id} sudah disweep, lewati finalize completed`);
+            resolveDone({ claimed: true, outcome: 'skipped', reason: 'swept' });
+            return;
+          }
           console.log(`[runner] SELESAI clip=${clip.id}`);
           void summarizeClipForSocial(clip.id).catch(() => {});
           resolveDone({ claimed: true, outcome: 'completed' });
@@ -253,10 +267,17 @@ export async function runOneSweepTick() {
     select: { id: true, clipId: true },
   });
   for (const job of stale) {
-    console.log(`[sweep] recovered stale job ${job.id}`);
     try {
+      // Klaim atomik dulu: hanya sapu job yang BENAR-BENAR masih 'processing'
+      // (owner belum memfinalisasi). Jika owner sudah menyelesaikannya, jangan
+      // refund/ganti status — guard updateMany membuat ini race-free.
+      const won = await prisma.clipJob.updateMany({
+        where: { id: job.id, status: 'processing' },
+        data: { status: 'failed', error: 'stale-processing-swept', completedAt: new Date() },
+      });
+      if (won.count !== 1) continue;
+      console.log(`[sweep] recovered stale job ${job.id}`);
       await refundFailedRender(job.clipId, 'Render dihentikan karena melebihi batas waktu (stale-processing-swept).');
-      await prisma.clipJob.update({ where: { id: job.id }, data: { status: 'failed', error: 'stale-processing-swept', completedAt: new Date() } });
     } catch (err) {
       console.error(`[sweep] gagal menyapu job ${job.id}:`, err);
     }
