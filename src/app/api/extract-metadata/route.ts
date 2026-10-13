@@ -19,6 +19,7 @@ import {
   describeWindow,
   tokenize,
 } from '@/lib/transcript-analysis';
+import { isRenderableSourceUrl } from '@/lib/url-guard';
 
 export const maxDuration = 60;
 
@@ -159,6 +160,12 @@ export async function POST(req: NextRequest) {
 
     if (!url || typeof url !== 'string') {
       return NextResponse.json({ error: 'URL tidak valid' }, { status: 400 });
+    }
+
+    // SSRF: URL dikirim ke yt-dlp/ffmpeg yang dijalankan server, jadi wajib
+    // dibatasi YouTube/Twitch seperti jalur render (cukup dengan allowlist url-guard).
+    if (!isRenderableSourceUrl(url)) {
+      return NextResponse.json({ error: 'URL harus https dari YouTube atau Twitch' }, { status: 400 });
     }
 
     let platform: 'youtube' | 'twitch' = 'youtube';
