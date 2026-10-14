@@ -118,9 +118,10 @@ export const auth = betterAuth({
   },
 
   plugins: [
-    nextCookies(),
     // OTP email: verifikasi pendaftaran + lupa password. Pengiriman via
     // src/lib/mailer.ts (fallback console bila MAIL_* belum diisi).
+    // Harus di ATAS nextCookies(): Better Auth meminta plugin cookie Next.js
+    // paling akhir, kalau tidak cookie sesi dari hook after bisa tak terkirim.
     emailOTP({
       overrideDefaultEmailVerification: true,
       sendVerificationOnSignUp: true,
@@ -139,6 +140,8 @@ export const auth = betterAuth({
         });
       },
     }),
+    // Plugin cookie Next.js harus paling akhir (peringatan Better Auth).
+    nextCookies(),
   ],
 });
 
