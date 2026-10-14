@@ -52,9 +52,11 @@ const explicitBaseURL =
   process.env.NEXT_PUBLIC_APP_URL?.trim() ||
   '';
 
-// Kalau base URL eksplisit ada, pakai itu. Kalau tidak, biarkan Better Auth
-// menurunkannya dari request yang masuk tetapi batasi ke allowedHosts.
-const baseURL = explicitBaseURL || { allowedHosts };
+// Dev: jangan dipin ke satu BETTER_AUTH_URL -- Better Auth menurunkannya dari
+// request yang masuk (localhost ATAU host tunnel) sambil dibatasi allowedHosts.
+// Mem-pin ke satu host (mis. satu ngrok) membuat buka-via-localhost kena
+// "Invalid origin". Produksi: baseURL eksplisit tetap dipakai (aman).
+const baseURL = isProduction ? explicitBaseURL || { allowedHosts } : { allowedHosts };
 
 // Asal tambahan di luar allowedHosts, dipisah koma.
 const trustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',') ?? [])
