@@ -347,6 +347,19 @@ export function Navbar() {
               </button>
             </form>
 
+            <div className="flex items-center justify-between text-[11px]">
+              {authMode === 'in' ? (
+                <Link href="/forgot-password" className="font-semibold text-brand-400 hover:text-white">
+                  Lupa password?
+                </Link>
+              ) : (
+                <span className="text-zinc-500">Setelah daftar, cek email untuk kode verifikasi.</span>
+              )}
+              <Link href="/verify-email" className="font-semibold text-brand-400 hover:text-white">
+                Kirim ulang kode
+              </Link>
+            </div>
+
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               <div className="h-[1px] flex-1 bg-white/10" />
               <span>atau</span>

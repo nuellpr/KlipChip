@@ -58,7 +58,10 @@ export function useAuth() {
       throw new Error(result.error.message || 'Gagal mendaftar.');
     }
     await refresh();
-    return user;
+    // Verifikasi email wajib: OTP sudah dikirim ke email user. Arahkan ke
+    // halaman verifikasi OTP (sign-in baru boleh setelah email terverifikasi).
+    window.location.assign(`/verify-email?email=${encodeURIComponent(email)}`);
+    return null;
   };
 
   const loginWithGoogle = async () => {

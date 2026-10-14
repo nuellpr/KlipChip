@@ -5,15 +5,17 @@
  * Pemanggil yang tidak berubah: `getCurrentUser()` tetap diekspor dengan
  * signature yang sama supaya ~15 route handler tidak perlu disentuh.
  *
- * Metode yang aktif: email+password (tidak perlu infra email) dan Google.
- * Magic link / OTP sengaja tidak dipakai karena project ini belum punya
- * kemampuan kirim email sama sekali -- lihat cara pakai di .env.example.
+ * Metode yang aktif: email+password (verifikasi OTP + lupa password via
+ * email) dan Google. Pengiriman email lewat SMTP (src/lib/mailer.ts); kalau
+ * MAIL_* belum diisi, isi email jatuh ke fallback console (dev).
  */
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { emailOTP } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
 import { headers } from 'next/headers';
 import { prisma } from './prisma.ts';
+import { sendEmail } from './mailer';
 
 /**
  * Base URL dan host yang dipercaya.
@@ -70,11 +72,20 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    // Tidak ada email verification: project belum punya pengirim email.
-    // Kalau nanti ditambah SMTP, nyalakan ini dan kirim link verifikasi.
-    requireEmailVerification: false,
+    // Verifikasi email wajib: pendaftaran mengirim OTP, sign-in ditolak sampai
+    // email terverifikasi. Pengiriman lewat src/lib/mailer.ts.
+    requireEmailVerification: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
+    // Lupa password: Better Auth menyusun `url` berisi token reset; kirim
+    // link itu via email. User buka link -> /reset-password?token=...
+    sendResetPassword: async ({ user, url }) => {
+      void sendEmail({
+        to: user.email,
+        subject: 'Reset password KlipChip',
+        text: `Kami menerima permintaan reset password untuk akun KlipChip kamu.\n\nBuka link ini untuk membuat password baru:\n${url}\n\nKalau kamu tidak memintanya, abaikan email ini.`,
+      });
+    },
   },
 
   socialProviders: {
@@ -106,7 +117,29 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [nextCookies()],
+  plugins: [
+    nextCookies(),
+    // OTP email: verifikasi pendaftaran + lupa password. Pengiriman via
+    // src/lib/mailer.ts (fallback console bila MAIL_* belum diisi).
+    emailOTP({
+      overrideDefaultEmailVerification: true,
+      sendVerificationOnSignUp: true,
+      otpLength: 6,
+      expiresIn: 300,
+      allowedAttempts: 3,
+      async sendVerificationOTP({ email, otp, type }) {
+        const subject =
+          type === 'email-verification'
+            ? 'Kode verifikasi KlipChip'
+            : 'Kode reset password KlipChip';
+        void sendEmail({
+          to: email,
+          subject,
+          text: `Kode OTP KlipChip kamu: ${otp}\n\nBerlaku 5 menit. Jangan bagikan kode ini ke siapa pun.`,
+        });
+      },
+    }),
+  ],
 });
 
 /**

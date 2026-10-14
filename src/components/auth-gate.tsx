@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ShieldCheck, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/use-auth';
 
 interface AuthGateProps {
@@ -135,6 +136,19 @@ export function AuthGate({
               )}
             </button>
           </form>
+
+          <div className="flex items-center justify-between text-[11px]">
+            {mode === 'in' ? (
+              <Link href="/forgot-password" className="font-semibold text-brand-400 hover:text-white">
+                Lupa password?
+              </Link>
+            ) : (
+              <span className="text-zinc-500">Setelah daftar, cek email untuk kode verifikasi.</span>
+            )}
+            <Link href="/verify-email" className="font-semibold text-brand-400 hover:text-white">
+              Kirim ulang kode
+            </Link>
+          </div>
 
           <div className="flex items-center gap-3">
             <span className="h-px flex-1 bg-white/10" />
