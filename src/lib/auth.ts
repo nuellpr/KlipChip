@@ -88,6 +88,15 @@ export const auth = betterAuth({
     },
   },
 
+  // Masuk lewat Google boleh menautkan diri ke akun yang emailnya sudah cocok
+  // (Google sendiri sudah memverifikasi email itu). Tanpa ini, Google sign-in
+  // untuk akun yang sudah ada lewat email/password gagal "account_not_linked".
+  account: {
+    accountLinking: {
+      trustedProviders: ['google'],
+    },
+  },
+
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID ?? '',
