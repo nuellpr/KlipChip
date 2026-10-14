@@ -109,10 +109,11 @@ export const auth = betterAuth({
     // tiba-tiba ter-logout.
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
-    // Session dibaca di setiap route handler. Cache cookie menghindari query
-    // DB per request; DB tetap sumber kebenaran (Better Auth memvalidasi token
-    // yang ditandatangani di dalam cookie).
-    cookieCache: { enabled: true, maxAge: 60 * 5 },
+    // cookieCache sengaja DIMATIKAN: opsi ini menyalin objek user ke dalam
+    // cookie sesi, dan User.avatarUrl bisa berisi data URI base64 ratusan KB
+    // (lihat PATCH /api/auth/me). Cookie sebesar itu melewati batas header
+    // Node (16 KB) sehingga SEMUA halaman balas HTTP 431. Cookie cukup berisi
+    // token bertanda tangan; session dibaca dari DB.
   },
 
   // Kolom tambahan milik app yang ditulis Better Auth saat user dibuat lewat
