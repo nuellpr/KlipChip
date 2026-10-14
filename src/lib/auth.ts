@@ -88,6 +88,13 @@ export const auth = betterAuth({
     },
   },
 
+  // Setelah OTP verifikasi berhasil, langsung buatkan sesi login supaya user
+  // tak perlu mengetik password lagi. Tanpa ini endpoint verify-email hanya
+  // mengembalikan token null dan user tetap harus login manual.
+  emailVerification: {
+    autoSignInAfterVerification: true,
+  },
+
   // Masuk lewat Google boleh menautkan diri ke akun yang emailnya sudah cocok
   // (Google sendiri sudah memverifikasi email itu). Tanpa ini, Google sign-in
   // untuk akun yang sudah ada lewat email/password gagal "account_not_linked".

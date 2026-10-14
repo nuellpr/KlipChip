@@ -64,12 +64,18 @@ export async function PATCH(req: NextRequest) {
 
     if (body.avatarUrl !== undefined) {
       const avatarUrl = typeof body.avatarUrl === 'string' ? body.avatarUrl.trim() : '';
-      // izinkan data URL base64 (max ~500KB) atau https URL
-      if (avatarUrl.length > 700000) {
-        return NextResponse.json({ error: 'Gambar terlalu besar (maks 500KB)' }, { status: 400 });
-      }
-      if (avatarUrl && !avatarUrl.startsWith('data:image/') && !avatarUrl.startsWith('https://')) {
+      const isDataUri = avatarUrl.startsWith('data:image/');
+      if (avatarUrl && !isDataUri && !avatarUrl.startsWith('https://')) {
         return NextResponse.json({ error: 'Format avatar tidak didukung' }, { status: 400 });
+      }
+      // data URI base64 dibatasi ±150KB (200 ribu karakter base64). Batas lama
+      // 700 ribu karakter bikin avatar raksasa tersimpan di DB + diangkut
+      // setiap respons /api/auth/me.
+      if (isDataUri && avatarUrl.length > 200000) {
+        return NextResponse.json({ error: 'Gambar terlalu besar (maks ±150KB)' }, { status: 400 });
+      }
+      if (!isDataUri && avatarUrl.length > 2048) {
+        return NextResponse.json({ error: 'URL avatar terlalu panjang (maks 2048 karakter)' }, { status: 400 });
       }
       data.avatarUrl = avatarUrl;
     }
