@@ -136,10 +136,14 @@ export function Hero3D() {
     };
   }, [isMounted]);
 
+  // Kanvas murni: seluruh logika 3D/partikel dipertahankan apa adanya.
+  // Polish ringan hanya fade-in opacity saat mount agar kanvas tidak "pop" di layar.
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none -z-10"
+      className={`absolute inset-0 w-full h-full pointer-events-none -z-10 transition-opacity duration-1000 ease-smooth ${
+        isMounted ? 'opacity-100' : 'opacity-0'
+      }`}
       aria-hidden="true"
     />
   );

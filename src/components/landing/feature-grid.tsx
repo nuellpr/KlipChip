@@ -1,12 +1,13 @@
 import React from 'react';
-import { 
-  Volume2, 
-  MessageSquare, 
-  CreditCard, 
-  Zap, 
-  CheckCircle2, 
-  Languages
+import {
+  Volume2,
+  MessageSquare,
+  CreditCard,
+  Zap,
+  CheckCircle2,
+  Languages,
 } from 'lucide-react';
+import { Reveal } from '@/components/motion/reveal';
 
 export function FeatureGrid() {
   const features = [
@@ -14,6 +15,7 @@ export function FeatureGrid() {
       icon: Volume2,
       badge: 'Audio AI',
       color: 'text-brand-400 border-brand-500/30 bg-brand-500/10',
+      glow: 'rgba(124,58,237,0.14)',
       title: 'Deteksi Audio Spike & Teriakan Streamer',
       description:
         'KlipChip memindai lonjakan desibel dan dinamika loudness secara instan untuk menemukan momen klimaks, tawa histeris, dan teriakan clutching tanpa harus menonton video berjam-jam.',
@@ -23,6 +25,7 @@ export function FeatureGrid() {
       icon: MessageSquare,
       badge: 'Reaksi Penonton',
       color: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+      glow: 'rgba(245,158,11,0.12)',
       title: 'Estimasi Kepadatan Reaksi Penonton',
       description:
         'Momen terbaik biasanya diikuti spam emote dan chat kilat dari penonton. KlipChip memperkirakan titik itu dari kepadatan kata transkrip, lalu menggabungkannya dengan skor audio spike.',
@@ -32,6 +35,7 @@ export function FeatureGrid() {
       icon: Languages,
       badge: 'Kamus Slang',
       color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+      glow: 'rgba(6,182,212,0.12)',
       title: 'Auto-Caption Slang Gaming Indonesia',
       description:
         'Mesin transkripsi khusus yang memahami bahasa gaul kreator Indonesia seperti "bjir", "ggwp", "rata lu", "bocil kematian", "water bucket clutch", hingga istilah roleplay FiveM.',
@@ -41,6 +45,7 @@ export function FeatureGrid() {
       icon: CreditCard,
       badge: 'Pay-Per-Clip',
       color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+      glow: 'rgba(16,185,129,0.12)',
       title: 'Bayar Per Clip Rp 5.000 via QRIS',
       description:
         'Tidak ada langganan bulanan mahal jika Anda hanya butuh 1-2 clip sesekali. Cukup scan QRIS, GoPay, OVO, DANA, atau VA BCA/Mandiri dan unduh file 1080p tanpa watermark.',
@@ -57,51 +62,72 @@ export function FeatureGrid() {
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/40 bg-brand-500/15 px-3.5 py-1 text-xs font-semibold text-brand-300">
-            <Zap className="h-3.5 w-3.5 text-accent" />
-            <span>Fitur Unggulan P0 MVP</span>
-          </div>
-          <h2 className="text-3xl font-extrabold sm:text-4xl lg:text-5xl text-white font-display">
-            Semua yang Dibutuhkan Kreator Indonesia untuk Go Viral
-          </h2>
-          <p className="text-base text-[#94A3B8]">
-            Dirancang dari nol untuk mengatasi kelemahan platform editing global yang sering salah mengenali slang lokal dan memaksa langganan ratusan ribu rupiah.
-          </p>
+          <Reveal>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/40 bg-brand-500/15 px-3.5 py-1 text-xs font-semibold text-brand-300">
+              <Zap className="h-3.5 w-3.5 text-accent" />
+              <span>Fitur Unggulan P0 MVP</span>
+            </div>
+          </Reveal>
+          <Reveal delay={90}>
+            <h2 className="text-3xl font-extrabold sm:text-4xl lg:text-5xl text-white font-display">
+              Semua yang Dibutuhkan Kreator Indonesia untuk Go Viral
+            </h2>
+          </Reveal>
+          <Reveal delay={180}>
+            <p className="text-base text-[#94A3B8]">
+              Dirancang dari nol untuk mengatasi kelemahan platform editing global yang sering salah
+              mengenali slang lokal dan memaksa langganan ratusan ribu rupiah.
+            </p>
+          </Reveal>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
           {features.map((feat, idx) => {
             const Icon = feat.icon;
             return (
-              <div
-                key={idx}
-                className="group relative rounded-3xl border border-white/10 bg-[#1E1C35]/80 p-8 transition-all duration-300 hover:border-brand-500/60 hover:bg-[#27273B] hyper-card-hover"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <div className={`flex h-14 w-14 items-center justify-center rounded-2xl border ${feat.color} shadow-lg shadow-black/50`}>
-                    <Icon className="h-7 w-7" />
-                  </div>
-                  <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs font-bold text-zinc-300">
-                    {feat.badge}
-                  </span>
-                </div>
+              <Reveal key={idx} delay={80 + idx * 90} className="h-full">
+                <div className="group relative h-full overflow-hidden rounded-3xl border border-white/10 bg-[#1E1C35]/80 p-8 transition-all duration-500 ease-smooth hover:-translate-y-1.5 hover:border-brand-500/60 hover:bg-[#27273B] hover:shadow-[0_24px_60px_-24px_rgba(124,58,237,0.55)]">
+                  {/* Spotlight halus mengikuti area atas kartu saat hover (CSS saja) */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -inset-px rounded-3xl opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                    style={{
+                      background: `radial-gradient(420px circle at 50% 0%, ${feat.glow}, transparent 70%)`,
+                    }}
+                  />
 
-                <h3 className="text-xl font-bold text-white mb-3 group-hover:text-[#A78BFA] transition-colors">
-                  {feat.title}
-                </h3>
-                <p className="text-sm text-[#94A3B8] leading-relaxed mb-6">
-                  {feat.description}
-                </p>
-
-                <div className="space-y-2 pt-4 border-t border-white/5">
-                  {feat.highlights.map((item, hIdx) => (
-                    <div key={hIdx} className="flex items-center gap-2 text-xs text-[#E2E8F0]">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>{item}</span>
+                  <div className="relative flex items-center justify-between mb-6">
+                    <div
+                      className={`flex h-14 w-14 items-center justify-center rounded-2xl border ${feat.color} shadow-lg shadow-black/50 transition-transform duration-500 ease-snap group-hover:scale-110 group-hover:-rotate-3`}
+                    >
+                      <Icon className="h-7 w-7" />
                     </div>
-                  ))}
+                    <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs font-bold text-zinc-300">
+                      {feat.badge}
+                    </span>
+                  </div>
+
+                  <h3 className="relative text-xl font-bold text-white mb-3 transition-colors group-hover:text-[#A78BFA]">
+                    {feat.title}
+                  </h3>
+                  <p className="relative text-sm text-[#94A3B8] leading-relaxed mb-6">
+                    {feat.description}
+                  </p>
+
+                  <div className="relative space-y-2 pt-4 border-t border-white/5">
+                    {feat.highlights.map((item, hIdx) => (
+                      <div
+                        key={hIdx}
+                        className="flex items-center gap-2 text-xs text-[#E2E8F0]"
+                        style={{ transitionDelay: `${hIdx * 40}ms` }}
+                      >
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </Reveal>
             );
           })}
         </div>

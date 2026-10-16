@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, HelpCircle } from 'lucide-react';
+import { Reveal } from '@/components/motion/reveal';
 
 export function FaqSection() {
   const [openIdx, setOpenIdx] = useState<number | null>(0);
@@ -37,43 +38,69 @@ export function FaqSection() {
     <section className="py-20 bg-zinc-950 border-t border-white/10">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12 space-y-3">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-900 px-3.5 py-1 text-xs font-semibold text-zinc-300">
-            <HelpCircle className="h-3.5 w-3.5 text-cyan-400" />
-            <span>Pertanyaan Populer</span>
-          </div>
-          <h2 className="text-3xl font-extrabold text-white font-display">
-            Frequently Asked Questions (FAQ)
-          </h2>
-          <p className="text-sm text-zinc-400">
-            Punya pertanyaan seputar KlipChip? Temukan jawabannya di bawah ini.
-          </p>
+          <Reveal>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-900 px-3.5 py-1 text-xs font-semibold text-zinc-300">
+              <HelpCircle className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Pertanyaan Populer</span>
+            </div>
+          </Reveal>
+          <Reveal delay={90}>
+            <h2 className="text-3xl font-extrabold text-white font-display">
+              Frequently Asked Questions (FAQ)
+            </h2>
+          </Reveal>
+          <Reveal delay={170}>
+            <p className="text-sm text-zinc-400">
+              Punya pertanyaan seputar KlipChip? Temukan jawabannya di bawah ini.
+            </p>
+          </Reveal>
         </div>
 
         <div className="space-y-4">
           {faqs.map((faq, idx) => {
             const isOpen = openIdx === idx;
             return (
-              <div
-                key={idx}
-                className="rounded-2xl border border-white/10 bg-zinc-900/60 overflow-hidden transition-all"
-              >
-                <button
-                  onClick={() => setOpenIdx(isOpen ? null : idx)}
-                  className="flex w-full items-center justify-between p-5 text-left text-sm font-bold text-white hover:text-cyan-300 transition-colors"
+              <Reveal key={idx} delay={60 + idx * 70}>
+                <div
+                  className={`overflow-hidden rounded-2xl border bg-zinc-900/60 transition-colors duration-300 ease-smooth ${
+                    isOpen
+                      ? 'border-cyan-400/40 bg-zinc-900'
+                      : 'border-white/10 hover:border-cyan-400/25'
+                  }`}
                 >
-                  <span>{faq.q}</span>
-                  <ChevronDown
-                    className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ${
-                      isOpen ? 'rotate-180 text-cyan-400' : ''
+                  <button
+                    onClick={() => setOpenIdx(isOpen ? null : idx)}
+                    aria-expanded={isOpen}
+                    className="flex w-full items-center justify-between gap-4 p-5 text-left text-sm font-bold text-white hover:text-cyan-300 active:scale-[0.995] transition-all duration-200"
+                  >
+                    <span className="flex items-center gap-3">
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors duration-300 ${
+                          isOpen ? 'bg-cyan-400' : 'bg-zinc-600'
+                        }`}
+                      />
+                      {faq.q}
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-300 ease-smooth ${
+                        isOpen ? 'rotate-180 text-cyan-400' : ''
+                      }`}
+                    />
+                  </button>
+                  {/* Buka/tutup halus lewat grid-template-rows (tanpa animasi height) */}
+                  <div
+                    className={`grid transition-all duration-300 ease-smooth ${
+                      isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
                     }`}
-                  />
-                </button>
-                {isOpen && (
-                  <div className="px-5 pb-5 text-xs text-zinc-300 leading-relaxed border-t border-white/5 pt-3">
-                    {faq.a}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="border-t border-white/5 px-5 pb-5 pt-3 pl-[38px] text-xs leading-relaxed text-zinc-300">
+                        {faq.a}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              </Reveal>
             );
           })}
         </div>

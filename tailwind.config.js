@@ -44,6 +44,14 @@ module.exports = {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'bounce-subtle': 'bounceSubtle 2s infinite',
         'shimmer': 'shimmer 2s linear infinite',
+        'float': 'float 6s ease-in-out infinite',
+        'marquee': 'marquee 30s linear infinite',
+        'pulse-ring': 'pulseRing 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite',
+        'shine': 'shine 1.6s cubic-bezier(0.16, 1, 0.3, 1)',
+      },
+      transitionTimingFunction: {
+        smooth: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        snap: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
       keyframes: {
         bounceSubtle: {
@@ -53,7 +61,24 @@ module.exports = {
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
-        }
+        },
+        float: {
+          '0%, 100%': { transform: 'translate3d(0, 0, 0)' },
+          '50%': { transform: 'translate3d(0, -10px, 0)' },
+        },
+        marquee: {
+          from: { transform: 'translate3d(0, 0, 0)' },
+          to: { transform: 'translate3d(-50%, 0, 0)' },
+        },
+        pulseRing: {
+          '0%': { transform: 'scale(0.9)', opacity: '0.6' },
+          '70%': { transform: 'scale(1.7)', opacity: '0' },
+          '100%': { transform: 'scale(1.7)', opacity: '0' },
+        },
+        shine: {
+          from: { transform: 'translate3d(-120%, 0, 0) skewX(-14deg)' },
+          to: { transform: 'translate3d(240%, 0, 0) skewX(-14deg)' },
+        },
       }
     },
   },

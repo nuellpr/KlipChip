@@ -158,3 +158,64 @@ body {
 .animate-audio-bar {
   animation: audioWave 1.2s ease-in-out infinite;
 }
+
+/* ===== Sistem motion (W1) ===== */
+/* Reveal saat masuk viewport: ringan, hanya transform + opacity.
+   Delay & jarak diatur lewat CSS variable dari komponen src/components/motion/reveal.tsx */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, var(--reveal-y, 18px), 0);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.reveal.is-in {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.reveal:not(.is-in) {
+  will-change: transform, opacity;
+}
+
+/* Latar aurora: blob gradien bergerak lambat, selalu di belakang konten */
+@keyframes auroraDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(4%, -6%, 0) scale(1.1); }
+  66% { transform: translate3d(-5%, 4%, 0) scale(0.95); }
+}
+
+.aurora-bg {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 45% at 22% 30%, rgba(124, 58, 237, 0.3) 0%, transparent 62%),
+    radial-gradient(32% 40% at 78% 26%, rgba(6, 182, 212, 0.22) 0%, transparent 60%),
+    radial-gradient(34% 42% at 60% 78%, rgba(244, 63, 94, 0.16) 0%, transparent 62%);
+  filter: blur(46px);
+  animation: auroraDrift 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Hormati preferensi pengguna: matikan animasi dekoratif */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .aurora-bg,
+  .animate-pulse-slow,
+  .animate-bounce-subtle,
+  .animate-shimmer,
+  .animate-float,
+  .animate-marquee,
+  .animate-pulse-ring,
+  .animate-audio-bar {
+    animation: none;
+  }
+}
